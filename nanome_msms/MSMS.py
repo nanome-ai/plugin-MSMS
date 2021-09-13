@@ -2,6 +2,7 @@ import nanome
 import math
 import tempfile, subprocess, os
 from nanome.util import Logs, ComplexUtils
+import nanome.api.shapes as shapes
 import numpy as np
 from sys import platform
 
@@ -34,11 +35,27 @@ class MSMS(nanome.PluginInstance):
             hdensity = "3.0"
 
             subprocess.run([exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", probeRadius, "-density", density, "-hdensity", hdensity, "-no_area", "-no_rest", "-no_header"])
-            if os.path.isfile(msms_output+".vert") and os.path.isfile(msms_output+".face"):
-                verts, norms, indices = parseVerticesNormals(msms_output+".vert")
-                faces = parseFaces(msms_output+".face")
+            if os.path.isfile(msms_output+".vert") and os.path.isfile(msms_output + ".face"):
+                verts, norms, indices = parseVerticesNormals(msms_output + ".vert")
+                faces = parseFaces(msms_output + ".face")
+
+                make_mesh(verts, norms, tris)
+
             else:
                 print("Failed")
+
+        def make_mesh(v, n, t):
+            #Create nanome shape
+            mesh = shapes.Mesh()
+            mesh.uv = []
+            mesh.vertices = np.asarray(v).flatten()
+            mesh.normals = np.asarray(n).flatten()
+            mesh.triangles = np.asarray(t).flatten()
+            mesh.colors = []
+            mesh.anchors[0].anchor_type = nanome.util.enums.ShapeAnchorType.Complex
+            mesh.anchors[0].position = nanome.util.Vector3(0, 0, 0)
+            mesh.color = nanome.util.Color(255, 255, 255, 255)
+            mesh.upload()
 
 def getMSMSExecutable():
     if platform == "linux" or platform == "linux2":
