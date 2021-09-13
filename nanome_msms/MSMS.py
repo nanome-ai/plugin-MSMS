@@ -35,7 +35,7 @@ class MSMS(nanome.PluginInstance):
 
             subprocess.run([exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", probeRadius, "-density", density, "-hdensity", hdensity, "-no_area", "-no_rest", "-no_header"])
             if os.path.isfile(msms_output+".vert") and os.path.isfile(msms_output+".face"):
-                verts = parseVertices(msms_output+".vert")
+                verts, norms, indices = parseVerticesNormals(msms_output+".vert")
                 faces = parseFaces(msms_output+".face")
             else:
                 print("Failed")
@@ -48,10 +48,30 @@ def getMSMSExecutable():
     elif platform == "win32":
         return "MSMS_binaries/Windows/msms.exe"
 
-def parseVertices(path):
-    return []
+def parseVerticesNormals(path):
+    verts = []
+    norms = []
+    indices = []
+    with open(path) as f:
+        lines = f.readlines()
+        for l in lines:
+            s = l.split()
+            v = [float(s[0]), float(s[1]), float(s[2])]
+            n = [float(s[3]), float(s[4]), float(s[5])]
+            idx = int(s[7] - 1)
+            verts += v
+            norms += n
+            indices += idx
+    return (verts, norms, indices)
 def parseFaces(path):
-    return []
+    tris = []
+    with open(path) as f:
+        lines = f.readlines()
+        for l in lines:
+            s = l.split()
+            t = [int(s[0]) - 1, int(s[1]) - 1, int(s[2]) - 1]
+            tris += t
+    return tris
 
 def main():
     plugin = nanome.Plugin("MSMS", "Run MSMS and load the molecular surface in Nanome.", "Computation", False)
