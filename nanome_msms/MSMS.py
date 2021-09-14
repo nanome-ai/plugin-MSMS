@@ -32,7 +32,7 @@ class MSMS(nanome.PluginInstance):
         else:
             self.set_plugin_list_button(nanome.util.enums.PluginListButtonType.run, "Run")
 
-    def make_mesh(self, v, n, t):
+    def make_mesh(self, v, n, t, complexIdex):
         #Create nanome shape
         mesh = shapes.Mesh()
         mesh.vertices = np.asarray(v).flatten()
@@ -41,6 +41,7 @@ class MSMS(nanome.PluginInstance):
         mesh.colors = np.repeat([1.0, 1.0, 1.0, 1.0], len(mesh.vertices) / 3)
         mesh.anchors[0].anchor_type = nanome.util.enums.ShapeAnchorType.Complex
         mesh.anchors[0].position = nanome.util.Vector3(0, 0, 0)
+        mesh.anchors[0].target = complexIdex
         mesh.color = nanome.util.Color(255, 255, 255, 255)
         mesh.uv = np.repeat([0.0, 0.0], len(mesh.vertices) / 3)
 
