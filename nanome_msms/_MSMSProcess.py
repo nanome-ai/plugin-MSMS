@@ -7,7 +7,7 @@ class MSMSProcess():
         self.__plugin = plugin
         self.__process_running = False
 
-    def start_process(self, workspace):
+    def start_process(self, workspace, probeRadius = 1.4, density = 10.0, hdensity = 3.0):
         #Run MSMS on every complex
         for c in workspace.complexes:
             positions = []
@@ -23,11 +23,8 @@ class MSMSProcess():
                 for i in range(len(positions)):
                     msms_file.write("{0:.5f} {1:.5f} {2:.5f} {3:.5f}\n".format(positions[i].x, positions[i].y, positions[i].z, radii[i]))
             exePath = getMSMSExecutable()
-            probeRadius = "1.4"
-            density = "1.0"
-            hdensity = "3.0"
 
-            subprocess.run(args=[exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", probeRadius, "-density", density, "-hdensity", hdensity, "-no_area", "-no_rest", "-no_header"])
+            subprocess.run(args=[exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", str(probeRadius), "-density", str(density), "-hdensity", str(hdensity), "-no_area", "-no_rest", "-no_header"])
             if os.path.isfile(msms_output.name + ".vert") and os.path.isfile(msms_output.name + ".face"):
                 verts, norms, indices = parseVerticesNormals(msms_output.name + ".vert")
                 faces = parseFaces(msms_output.name + ".face")
