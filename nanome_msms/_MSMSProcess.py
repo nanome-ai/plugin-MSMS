@@ -29,7 +29,7 @@ class MSMSProcess():
                 verts, norms, indices = parseVerticesNormals(msms_output.name + ".vert")
                 faces = parseFaces(msms_output.name + ".face")
 
-                self.__plugin.make_mesh(verts, norms, faces)
+                self.__plugin.make_mesh(verts, norms, faces, c.index)
 
             else:
                 Logs.error("Failed to run MSMS")
