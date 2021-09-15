@@ -42,7 +42,7 @@ class MSMS(nanome.PluginInstance):
         mesh.anchors[0].anchor_type = nanome.util.enums.ShapeAnchorType.Complex
         mesh.anchors[0].position = nanome.util.Vector3(0, 0, 0)
         mesh.anchors[0].target = complexIdex
-        mesh.color = nanome.util.Color(255, 255, 255, 255)
+        mesh.color = nanome.util.Color(255, 255, 255, 125)
         mesh.uv = np.repeat([0.0, 0.0], len(mesh.vertices) / 3)
 
         self.send_notification(nanome.util.enums.NotificationTypes.message, "Receiving mesh (" + str(len(mesh.vertices)/3) + " vertices)")

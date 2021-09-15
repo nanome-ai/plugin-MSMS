@@ -16,7 +16,7 @@ class MSMSProcess():
             for atom in molecule.atoms:
                 positions.append(atom.position)
                 radii.append(atom.vdw_radius)
-            
+
             msms_input = tempfile.NamedTemporaryFile(delete=False, suffix='.xyzr')
             msms_output = tempfile.NamedTemporaryFile(delete=False, suffix='.out')
             with open(msms_input.name, 'w') as msms_file:
@@ -67,8 +67,8 @@ def parseVerticesNormals(path):
             if l.startswith("#"):
                 continue
             s = l.split()
-            #Invert x for vertices and normals => Unity !
-            v = [-float(s[0]), float(s[1]), float(s[2])]
+            v = [float(s[0]), float(s[1]), float(s[2])]
+            #Invert x for normals => Unity !
             n = [-float(s[3]), float(s[4]), float(s[5])]
             idx = int(s[7]) - 1
             verts += v
@@ -84,7 +84,7 @@ def parseFaces(path):
             if l.startswith("#"):
                 continue
             s = l.split()
-            #Invert triangle order + 0 base index instead of 1 based
-            t = [int(s[1]) - 1, int(s[0]) - 1, int(s[2]) - 1]
+            # 0 base index instead of 1 based
+            t = [int(s[0]) - 1, int(s[1]) - 1, int(s[2]) - 1]
             tris += t
     return tris
