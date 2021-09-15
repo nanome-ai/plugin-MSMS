@@ -15,7 +15,7 @@ class MSMSProcess():
             molecule = c._molecules[c.current_frame]
             for atom in molecule.atoms:
                 positions.append(atom.position)
-                radii.append(atom.atom_scale * 2.5)#TODO: This is not the VDW atom radius !
+                radii.append(atom.vdw_radius)
             
             msms_input = tempfile.NamedTemporaryFile(delete=False, suffix='.xyzr')
             msms_output = tempfile.NamedTemporaryFile(delete=False, suffix='.out')
