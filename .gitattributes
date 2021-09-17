@@ -1,0 +1,6 @@
+# Binaries
+*.dll filter=lfs diff=lfs merge=lfs -text lockable
+*.bin filter=lfs diff=lfs merge=lfs -text lockable
+*.exe filter=lfs diff=lfs merge=lfs -text lockable
+*.so filter=lfs diff=lfs merge=lfs -text lockable
+nanome_msms/MSMS_binaries/** filter=lfs diff=lfs merge=lfs -text
