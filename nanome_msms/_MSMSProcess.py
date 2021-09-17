@@ -29,7 +29,11 @@ class MSMSProcess():
                 verts, norms, indices = parseVerticesNormals(msms_output.name + ".vert")
                 faces = parseFaces(msms_output.name + ".face")
 
-                self.__plugin.make_mesh(verts, norms, faces, c.index)
+                aoExePath = getAOEmbreeExecutable()
+                colors = []
+                if aoExePath != "":
+                    colors = runAOEmbree(aoExePath, verts, norms, faces)
+                self.__plugin.make_mesh(verts, norms, faces, c.index, colors)
 
             else:
                 Logs.error("Failed to run MSMS")
@@ -56,6 +60,11 @@ def getMSMSExecutable():
         return "nanome_msms/MSMS_binaries/OSX/msms"
     elif sys.platform == "win32":
         return "nanome_msms/MSMS_binaries/Windows/msms.exe"
+
+def getAOEmbreeExecutable():
+    if sys.platform == "win32":
+        return "nanome_msms/AO_binaries/Windows/AOEmbree.exe"
+    return ""
 
 def parseVerticesNormals(path):
     verts = []
@@ -88,3 +97,22 @@ def parseFaces(path):
             t = [int(s[0]) - 1, int(s[1]) - 1, int(s[2]) - 1]
             tris += t
     return tris
+
+
+def runAOEmbree(exePath, verts, norms, faces):
+    #Write mesh to OBJ file
+    ao_input = tempfile.NamedTemporaryFile(delete=False, suffix='.obj')
+    with open(ao_input.name, "w") as f:
+        for v in range(int(len(verts) / 3)):
+            f.write("v {0:.6f} {1:.6f} {2:.6f}\n".format(verts[v * 3], verts[v * 3 + 1], verts[v * 3 + 2]))
+            f.write("vn {0:.6f} {1:.6f} {2:.6f}\n".format(norms[v * 3], norms[v * 3 + 1], norms[v * 3 + 2]))
+        for t in range(int(len(faces) / 3)):
+            f.write("f {} {} {}\n".format(faces[t * 3] + 1, faces[t * 3 + 1] + 1, faces[t * 3 + 2] + 1))
+    #Run AOEmbree
+    AOvalues = subprocess.run(args=[exePath, "-i", ao_input.name, "-a"], capture_output=True, text=True)
+    vertCol = []
+    sAOValues = AOvalues.stdout.split()
+    for i in range(int(len(verts) / 3)):
+        ao = float(sAOValues[i])
+        vertCol += [ao, ao, ao, 1.0]
+    return vertCol

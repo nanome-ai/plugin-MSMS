@@ -28,17 +28,20 @@ class MSMS(nanome.PluginInstance):
         else:
             self.set_plugin_list_button(nanome.util.enums.PluginListButtonType.run, "Run")
 
-    def make_mesh(self, v, n, t, complexIdex):
+    def make_mesh(self, v, n, t, complexIdex, colors = []):
         #Create nanome shape
         mesh = shapes.Mesh()
         mesh.vertices = np.asarray(v).flatten()
         mesh.normals = np.asarray(n).flatten()
         mesh.triangles = np.asarray(t).flatten()
-        mesh.colors = np.repeat([1.0, 1.0, 1.0, 1.0], len(mesh.vertices) / 3)
+        if len(colors) == 0:
+            mesh.colors = np.repeat([1.0, 1.0, 1.0, 1.0], len(mesh.vertices) / 3)
+        else:
+            mesh.colors = np.asarray(colors)
         mesh.anchors[0].anchor_type = nanome.util.enums.ShapeAnchorType.Complex
         mesh.anchors[0].position = nanome.util.Vector3(0, 0, 0)
         mesh.anchors[0].target = complexIdex
-        mesh.color = nanome.util.Color(255, 255, 255, 125)
+        mesh.color = nanome.util.Color(255, 255, 255, 255)
         mesh.uv = np.repeat([0.0, 0.0], len(mesh.vertices) / 3)
 
         self.send_notification(nanome.util.enums.NotificationTypes.message, "Receiving mesh (" + str(len(mesh.vertices)/3) + " vertices)")
