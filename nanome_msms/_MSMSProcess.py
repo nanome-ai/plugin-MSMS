@@ -109,7 +109,7 @@ def runAOEmbree(exePath, verts, norms, faces):
         for t in range(int(len(faces) / 3)):
             f.write("f {} {} {}\n".format(faces[t * 3] + 1, faces[t * 3 + 1] + 1, faces[t * 3 + 2] + 1))
     #Run AOEmbree
-    AOvalues = subprocess.run(args=[exePath, "-i", ao_input.name, "-a"], capture_output=True, text=True)
+    AOvalues = subprocess.run(args=[exePath, "-i", ao_input.name, "-a", "-s", str(512), "-d", str(50.0)], capture_output=True, text=True)
     vertCol = []
     sAOValues = AOvalues.stdout.split()
     for i in range(int(len(verts) / 3)):

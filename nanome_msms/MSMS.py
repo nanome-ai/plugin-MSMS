@@ -1,7 +1,7 @@
 import nanome
 import os, math
 from nanome.util import Logs, ComplexUtils
-import nanome.api.shapes as shapes
+from nanome.api import shapes
 from sys import platform
 from ._MSMSProcess import MSMSProcess
 import numpy as np
