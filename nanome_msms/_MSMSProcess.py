@@ -7,7 +7,7 @@ class MSMSProcess():
         self.__plugin = plugin
         self.__process_running = False
 
-    def start_process(self, workspace, probeRadius = 1.4, density = 10.0, hdensity = 3.0):
+    def start_process(self, workspace, probe_radius = 1.4, density = 10.0, hdensity = 3.0, do_ao = True):
         #Run MSMS on every complex
         for c in workspace.complexes:
             positions = []
@@ -24,16 +24,17 @@ class MSMSProcess():
                     msms_file.write("{0:.5f} {1:.5f} {2:.5f} {3:.5f}\n".format(-positions[i].x, positions[i].y, positions[i].z, radii[i]))
             exePath = getMSMSExecutable()
 
-            subprocess.run(args=[exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", str(probeRadius), "-density", str(density), "-hdensity", str(hdensity), "-no_area", "-no_rest", "-no_header"])
+            subprocess.run(args=[exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", str(probe_radius), "-density", str(density), "-hdensity", str(hdensity), "-no_area", "-no_rest", "-no_header"])
             if os.path.isfile(msms_output.name + ".vert") and os.path.isfile(msms_output.name + ".face"):
                 verts, norms, indices = parseVerticesNormals(msms_output.name + ".vert")
                 faces = parseFaces(msms_output.name + ".face")
 
-                aoExePath = getAOEmbreeExecutable()
-                colors = []
-                if aoExePath != "":
-                    colors = runAOEmbree(aoExePath, verts, norms, faces)
-                self.__plugin.make_mesh(verts, norms, faces, c.index, colors)
+                if do_ao:
+                    aoExePath = getAOEmbreeExecutable()
+                    colors = []
+                    if aoExePath != "":
+                        colors = runAOEmbree(aoExePath, verts, norms, faces)
+                    self.__plugin.make_mesh(verts, norms, faces, c.index, colors)
 
             else:
                 Logs.error("Failed to run MSMS")
@@ -101,7 +102,7 @@ def parseFaces(path):
     return tris
 
 
-def runAOEmbree(exePath, verts, norms, faces):
+def runAOEmbree(exePath, verts, norms, faces, AO_steps = 512, AO_max_dist = 50.0):
     #Write mesh to OBJ file
     ao_input = tempfile.NamedTemporaryFile(delete=False, suffix='.obj')
     with open(ao_input.name, "w") as f:
@@ -116,7 +117,7 @@ def runAOEmbree(exePath, verts, norms, faces):
         envi['LD_LIBRARY_PATH'] = os.path.dirname(os.path.abspath(exePath))
 
     #Run AOEmbree
-    AOvalues = subprocess.run(env=envi, args=[os.path.abspath(exePath), "-i", ao_input.name, "-a", "-s", str(512), "-d", str(50.0)], capture_output=True, text=True)
+    AOvalues = subprocess.run(env=envi, args=[os.path.abspath(exePath), "-i", ao_input.name, "-a", "-s", str(AO_steps), "-d", str(AO_max_dist)], capture_output=True, text=True)
     vertCol = []
     sAOValues = AOvalues.stdout.split()
     try:

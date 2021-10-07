@@ -51,7 +51,7 @@ class MSMS(nanome.PluginInstance):
         mesh.upload()
 
     def on_workspace_received(self, workspace):
-        self._process.start_process(workspace)
+        self._process.start_process(workspace, do_ao = True, probe_radius = 1.4)
 
 def main():
     nanome.Plugin.setup("MSMS", "Run MSMS and load the molecular surface in Nanome.", "Computation", False, MSMS)
