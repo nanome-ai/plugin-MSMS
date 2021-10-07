@@ -64,6 +64,8 @@ def getMSMSExecutable():
 def getAOEmbreeExecutable():
     if sys.platform == "win32":
         return "nanome_msms/AO_binaries/Windows/AOEmbree.exe"
+    elif sys.platform == "linux" or sys.platform == "linux2":
+        return "nanome_msms/AO_binaries/Linux64/AOEmbree"
     return ""
 
 def parseVerticesNormals(path):
@@ -108,11 +110,21 @@ def runAOEmbree(exePath, verts, norms, faces):
             f.write("vn {0:.6f} {1:.6f} {2:.6f}\n".format(norms[v * 3], norms[v * 3 + 1], norms[v * 3 + 2]))
         for t in range(int(len(faces) / 3)):
             f.write("f {} {} {}\n".format(faces[t * 3] + 1, faces[t * 3 + 1] + 1, faces[t * 3 + 2] + 1))
+
+    envi = dict(os.environ)
+    if sys.platform == "linux" or sys.platform == "linux2":
+        envi['LD_LIBRARY_PATH'] = os.path.dirname(os.path.abspath(exePath))
+
     #Run AOEmbree
-    AOvalues = subprocess.run(args=[exePath, "-i", ao_input.name, "-a", "-s", str(512), "-d", str(50.0)], capture_output=True, text=True)
+    AOvalues = subprocess.run(env=envi, args=[os.path.abspath(exePath), "-i", ao_input.name, "-a", "-s", str(512), "-d", str(50.0)], capture_output=True, text=True)
     vertCol = []
     sAOValues = AOvalues.stdout.split()
-    for i in range(int(len(verts) / 3)):
-        ao = float(sAOValues[i])
-        vertCol += [ao, ao, ao, 1.0]
+    try:
+        for i in range(int(len(verts) / 3)):
+            ao = float(sAOValues[i])
+            vertCol += [ao, ao, ao, 1.0]
+    except Exception as e:
+        Logs.warning("AO computation failed")
+        return []
+    
     return vertCol

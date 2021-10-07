@@ -5,3 +5,4 @@
 *.so filter=lfs diff=lfs merge=lfs -text lockable
 nanome_msms/AO_binaries/** filter=lfs diff=lfs merge=lfs -text
 nanome_msms/MSMS_binaries/** filter=lfs diff=lfs merge=lfs -text
+nanome_msms/AO_binaries/Linux64/** filter=lfs diff=lfs merge=lfs -text

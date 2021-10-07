@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0, "D:/Dev/nanome-lib-fork/")
+
 import nanome
 import os, math
 from nanome.util import Logs, ComplexUtils
