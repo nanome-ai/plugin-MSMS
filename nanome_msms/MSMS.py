@@ -19,9 +19,6 @@ class MSMS(nanome.PluginInstance):
     def on_run(self):
         self.request_workspace(self.on_workspace_received)
 
-    def update(self):
-        self._process.update()
-
     def stop_msms(self):
         self._process.stop_process()
 

@@ -45,11 +45,6 @@ class MSMSProcess():
             self.__process.stop()
         self.__process_running = False
 
-    def update(self):
-        if not self.__process_running:
-            Logs.debug('MSMS done')
-            self.stop_process()
-
     def __on_process_error(self, error):
         Logs.warning('Error during MSMS:')
         Logs.warning(error)
