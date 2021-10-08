@@ -1,6 +1,7 @@
 # Nanome - MSMS
 
 A Nanome Plugin to run MSMS to compute molecular surfaces and load it in Nanome.
+(Molecular Surface by Michael Sanner)
 
 ## Dependencies
 
