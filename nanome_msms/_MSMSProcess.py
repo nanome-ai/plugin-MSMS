@@ -112,7 +112,7 @@ def runAOEmbree(exePath, verts, norms, faces, AO_steps = 512, AO_max_dist = 50.0
         envi['LD_LIBRARY_PATH'] = os.path.dirname(os.path.abspath(exePath))
 
     #Run AOEmbree
-    AOvalues = subprocess.run(env=envi, args=[os.path.abspath(exePath), "-i", ao_input.name, "-a", "-s", str(AO_steps), "-d", str(AO_max_dist)], capture_output=True, text=True)
+    AOvalues = subprocess.run(env=envi, args=[os.path.abspath(exePath), "-n", "-i", ao_input.name, "-a", "-s", str(AO_steps), "-d", str(AO_max_dist)], capture_output=True, text=True)
     vertCol = []
     sAOValues = AOvalues.stdout.split()
     try:
@@ -122,5 +122,5 @@ def runAOEmbree(exePath, verts, norms, faces, AO_steps = 512, AO_max_dist = 50.0
     except Exception as e:
         Logs.warning("AO computation failed")
         return []
-    
+
     return vertCol
