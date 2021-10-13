@@ -45,9 +45,14 @@ class MSMS(nanome.PluginInstance):
                 btn2 = ln_btn.add_new_toggle_switch("AO")
                 btn2.text.auto_size = False
                 btn2.text.size = 0.25
+                btn2.selected = True
                 btn.register_pressed_callback(partial(self.call_msms_complex, c, btn2, 1.4))
                 self.lst_obj.items.append(item)
+                c.register_selection_changed_callback(self.ask_updated_worspace)
         self.update_content(self.lst_obj)
+
+    def ask_updated_worspace(self, compl):
+        self.on_run()
 
     def call_msms_complex(self, cur_complex, ao_button, probe_radius, button):
         self._process.start_process(cur_complex, do_ao = ao_button.selected, probe_radius = probe_radius)
@@ -90,6 +95,7 @@ class MSMS(nanome.PluginInstance):
         mesh.upload()
 
     def on_workspace_received(self, workspace):
+        self.lst_obj.items.clear()
         self._workspace_received = True
         self._current_workspace = workspace
 
