@@ -37,15 +37,14 @@ class MSMS(nanome.PluginInstance):
                 item = nanome.ui.LayoutNode()
                 item.layout_orientation = nanome.ui.LayoutNode.LayoutTypes.horizontal
                 btn_ln = item.create_child_node()
-                btn_ln.set_padding(right=0.0)
                 btn = btn_ln.add_new_button(complex_name)
                 ln_btn = item.create_child_node()
-                # ln_btn.set_padding(left=0.8)
-                ln_btn.forward_dist = 0.003
+                ln_btn.set_padding(left=0.13)
+                ln_btn.forward_dist = 0.001
                 btn2 = ln_btn.add_new_toggle_switch("AO")
-                btn2.text.auto_size = False
-                btn2.text.size = 0.25
                 btn2.selected = True
+                ln_btn.horizontal_align = nanome.util.enums.HorizAlignOptions.Right
+
                 btn.register_pressed_callback(partial(self.call_msms_complex, c, btn2, 1.4))
                 self.lst_obj.items.append(item)
                 c.register_selection_changed_callback(self.ask_updated_worspace)
