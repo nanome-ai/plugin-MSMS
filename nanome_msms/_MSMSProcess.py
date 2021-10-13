@@ -7,20 +7,57 @@ class MSMSProcess():
         self.__plugin = plugin
         self.__process_running = False
         self._selected_only = True
+        self._cut_per_chain = True
 
     def start_process(self, cur_complex, probe_radius = 1.4, density = 10.0, hdensity = 3.0, do_ao = True):
         positions = []
         radii = []
         molecule = cur_complex._molecules[cur_complex.current_frame]
-        for atom in molecule.atoms:
-            if not self._selected_only or atom.selected:
-                positions.append(atom.position)
-                radii.append(atom.vdw_radius)
 
-        if len(positions) == 0 and self._selected_only:
-            self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Nothing is selected")
-            self.stop_process()
-            return
+        verts = []
+        tri = []
+        norms = []
+        cols = []
+
+        if self._cut_per_chain:
+
+            for chain in molecule.chains:
+                positions = []
+                radii = []
+                for atom in chain.atoms:
+                    if not self._selected_only or atom.selected:
+                        positions.append(atom.position)
+                        radii.append(atom.vdw_radius)
+                if len(positions) == 0 and self._selected_only:
+                     self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Nothing is selected")
+                     self.stop_process()
+                     return
+                else:
+                    v, n, t, c = self.compute_MSMS(positions, radii, probe_radius, density, hdensity, False)
+                    self.add_to_mesh(v, n, t, verts, norms, tri)
+            if do_ao:
+                aoExePath = getAOEmbreeExecutable()
+                if aoExePath != "":
+                    cols = runAOEmbree(aoExePath, verts, norms, tri)
+        else:
+            for atom in molecule.atoms:
+                if not self._selected_only or atom.selected:
+                    positions.append(atom.position)
+                    radii.append(atom.vdw_radius)
+
+            if len(positions) == 0 and self._selected_only:
+                self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Nothing is selected")
+                self.stop_process()
+                return
+
+            verts, norms, tri, cols = self.compute_MSMS(positions, radii, probe_radius, density, hdensity, do_ao)
+        self.__plugin.make_mesh(verts, norms, tri, cur_complex.index, cols)
+    
+    def compute_MSMS(self, positions, radii, probe_radius, density, hdensity, do_ao):
+        verts = []
+        norms = []
+        faces = []
+        colors = []
 
         msms_input = tempfile.NamedTemporaryFile(delete=False, suffix='.xyzr')
         msms_output = tempfile.NamedTemporaryFile(delete=False, suffix='.out')
@@ -36,15 +73,42 @@ class MSMSProcess():
 
             if do_ao:
                 aoExePath = getAOEmbreeExecutable()
-                colors = []
                 if aoExePath != "":
                     colors = runAOEmbree(aoExePath, verts, norms, faces)
-                self.__plugin.make_mesh(verts, norms, faces, cur_complex.index, colors)
 
         else:
             Logs.error("Failed to run MSMS")
+        return (verts, norms, faces, colors)
+
+
+    def compute_MSMS_part(self, positions, radii, probe_radius, density, hdensity):
+        msms_input = tempfile.NamedTemporaryFile(delete=False, suffix='.xyzr')
+        msms_output = tempfile.NamedTemporaryFile(delete=False, suffix='.out')
+        with open(msms_input.name, 'w') as msms_file:
+            for i in range(len(positions)):
+                msms_file.write("{0:.5f} {1:.5f} {2:.5f} {3:.5f}\n".format(-positions[i].x, positions[i].y, positions[i].z, radii[i]))
+        exePath = getMSMSExecutable()
+
+        verts = []
+        norms = []
+        faces = []
+        subprocess.run(args=[exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", str(probe_radius), "-density", str(density), "-hdensity", str(hdensity), "-no_area", "-no_rest", "-no_header"])
+        if os.path.isfile(msms_output.name + ".vert") and os.path.isfile(msms_output.name + ".face"):
+            verts, norms, indices = parseVerticesNormals(msms_output.name + ".vert")
+            faces = parseFaces(msms_output.name + ".face")
+        else:
+            Logs.error("Failed to run MSMS\n")
             self.stop_process()
-    
+        return (verts, norms, faces)
+
+    def add_to_mesh(self, v, n, t, verts, norms, tris):
+        id_v = int(len(verts) / 3)
+        verts += v
+        norms += n
+
+        for i in t:
+            tris.append(i + id_v)
+
     def stop_process(self):
         if self.__process_running:
             self.__process.stop()
