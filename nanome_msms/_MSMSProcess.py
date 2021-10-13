@@ -6,44 +6,49 @@ class MSMSProcess():
     def __init__(self, plugin):
         self.__plugin = plugin
         self.__process_running = False
+        self._selected_only = True
 
-    def start_process(self, workspace, probeRadius = 1.4, density = 10.0, hdensity = 3.0):
-        #Run MSMS on every complex
-        for c in workspace.complexes:
-            positions = []
-            radii = []
-            molecule = c._molecules[c.current_frame]
-            for atom in molecule.atoms:
+    def start_process(self, cur_complex, probe_radius = 1.4, density = 10.0, hdensity = 3.0, do_ao = True):
+        positions = []
+        radii = []
+        molecule = cur_complex._molecules[cur_complex.current_frame]
+        for atom in molecule.atoms:
+            if not self._selected_only or atom.selected:
                 positions.append(atom.position)
                 radii.append(atom.vdw_radius)
 
-            msms_input = tempfile.NamedTemporaryFile(delete=False, suffix='.xyzr')
-            msms_output = tempfile.NamedTemporaryFile(delete=False, suffix='.out')
-            with open(msms_input.name, 'w') as msms_file:
-                for i in range(len(positions)):
-                    msms_file.write("{0:.5f} {1:.5f} {2:.5f} {3:.5f}\n".format(-positions[i].x, positions[i].y, positions[i].z, radii[i]))
-            exePath = getMSMSExecutable()
+        if len(positions) == 0 and self._selected_only:
+            self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Nothing is selected")
+            self.stop_process()
+            return
 
-            subprocess.run(args=[exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", str(probeRadius), "-density", str(density), "-hdensity", str(hdensity), "-no_area", "-no_rest", "-no_header"])
-            if os.path.isfile(msms_output.name + ".vert") and os.path.isfile(msms_output.name + ".face"):
-                verts, norms, indices = parseVerticesNormals(msms_output.name + ".vert")
-                faces = parseFaces(msms_output.name + ".face")
+        msms_input = tempfile.NamedTemporaryFile(delete=False, suffix='.xyzr')
+        msms_output = tempfile.NamedTemporaryFile(delete=False, suffix='.out')
+        with open(msms_input.name, 'w') as msms_file:
+            for i in range(len(positions)):
+                msms_file.write("{0:.5f} {1:.5f} {2:.5f} {3:.5f}\n".format(-positions[i].x, positions[i].y, positions[i].z, radii[i]))
+        exePath = getMSMSExecutable()
 
-                self.__plugin.make_mesh(verts, norms, faces, c.index)
+        subprocess.run(args=[exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", str(probe_radius), "-density", str(density), "-hdensity", str(hdensity), "-no_area", "-no_rest", "-no_header"])
+        if os.path.isfile(msms_output.name + ".vert") and os.path.isfile(msms_output.name + ".face"):
+            verts, norms, indices = parseVerticesNormals(msms_output.name + ".vert")
+            faces = parseFaces(msms_output.name + ".face")
 
-            else:
-                Logs.error("Failed to run MSMS")
-                self.stop_process()
+            if do_ao:
+                aoExePath = getAOEmbreeExecutable()
+                colors = []
+                if aoExePath != "":
+                    colors = runAOEmbree(aoExePath, verts, norms, faces)
+                self.__plugin.make_mesh(verts, norms, faces, cur_complex.index, colors)
+
+        else:
+            Logs.error("Failed to run MSMS")
+            self.stop_process()
     
     def stop_process(self):
         if self.__process_running:
             self.__process.stop()
         self.__process_running = False
-
-    def update(self):
-        if not self.__process_running:
-            Logs.debug('MSMS done')
-            self.stop_process()
 
     def __on_process_error(self, error):
         Logs.warning('Error during MSMS:')
@@ -56,6 +61,13 @@ def getMSMSExecutable():
         return "nanome_msms/MSMS_binaries/OSX/msms"
     elif sys.platform == "win32":
         return "nanome_msms/MSMS_binaries/Windows/msms.exe"
+
+def getAOEmbreeExecutable():
+    if sys.platform == "win32":
+        return "nanome_msms/AO_binaries/Windows/AOEmbree.exe"
+    elif sys.platform == "linux" or sys.platform == "linux2":
+        return "nanome_msms/AO_binaries/Linux64/AOEmbree"
+    return ""
 
 def parseVerticesNormals(path):
     verts = []
@@ -88,3 +100,32 @@ def parseFaces(path):
             t = [int(s[0]) - 1, int(s[1]) - 1, int(s[2]) - 1]
             tris += t
     return tris
+
+
+def runAOEmbree(exePath, verts, norms, faces, AO_steps = 512, AO_max_dist = 50.0):
+    #Write mesh to OBJ file
+    ao_input = tempfile.NamedTemporaryFile(delete=False, suffix='.obj')
+    with open(ao_input.name, "w") as f:
+        for v in range(int(len(verts) / 3)):
+            f.write("v {0:.6f} {1:.6f} {2:.6f}\n".format(verts[v * 3], verts[v * 3 + 1], verts[v * 3 + 2]))
+            f.write("vn {0:.6f} {1:.6f} {2:.6f}\n".format(norms[v * 3], norms[v * 3 + 1], norms[v * 3 + 2]))
+        for t in range(int(len(faces) / 3)):
+            f.write("f {} {} {}\n".format(faces[t * 3] + 1, faces[t * 3 + 1] + 1, faces[t * 3 + 2] + 1))
+
+    envi = dict(os.environ)
+    if sys.platform == "linux" or sys.platform == "linux2":
+        envi['LD_LIBRARY_PATH'] = os.path.dirname(os.path.abspath(exePath))
+
+    #Run AOEmbree
+    AOvalues = subprocess.run(env=envi, args=[os.path.abspath(exePath), "-n", "-i", ao_input.name, "-a", "-s", str(AO_steps), "-d", str(AO_max_dist)], capture_output=True, text=True)
+    vertCol = []
+    sAOValues = AOvalues.stdout.split()
+    try:
+        for i in range(int(len(verts) / 3)):
+            ao = float(sAOValues[i])
+            vertCol += [ao, ao, ao, 1.0]
+    except Exception as e:
+        Logs.warning("AO computation failed")
+        return []
+
+    return vertCol
