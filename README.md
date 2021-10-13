@@ -2,6 +2,7 @@
 
 A Nanome Plugin to run MSMS to compute molecular surfaces and load it in Nanome.
 (Molecular Surface by Michael Sanner)
+Optionally computes AO (Ambient Occlusion) for the computed meshes using https://github.com/nezix/AOEmbree
 
 ## Dependencies
 
