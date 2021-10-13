@@ -21,6 +21,7 @@ class MSMSProcess():
 
         if self._cut_per_chain:
 
+            count_atoms = 0
             for chain in molecule.chains:
                 positions = []
                 radii = []
@@ -28,13 +29,14 @@ class MSMSProcess():
                     if not self._selected_only or atom.selected:
                         positions.append(atom.position)
                         radii.append(atom.vdw_radius)
-                if len(positions) == 0 and self._selected_only:
-                     self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Nothing is selected")
-                     self.stop_process()
-                     return
-                else:
-                    v, n, t, c = self.compute_MSMS(positions, radii, probe_radius, density, hdensity, False)
+                        count_atoms+=1
+                if len(positions) != 0:
+                    v, n, t = self.compute_MSMS(positions, radii, probe_radius, density, hdensity)
                     self.add_to_mesh(v, n, t, verts, norms, tri)
+            if count_atoms == 0 and self._selected_only:
+                self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Nothing is selected")
+                self.stop_process()
+                return
             if do_ao:
                 aoExePath = getAOEmbreeExecutable()
                 if aoExePath != "":
@@ -49,39 +51,20 @@ class MSMSProcess():
                 self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Nothing is selected")
                 self.stop_process()
                 return
-
-            verts, norms, tri, cols = self.compute_MSMS(positions, radii, probe_radius, density, hdensity, do_ao)
-        self.__plugin.make_mesh(verts, norms, tri, cur_complex.index, cols)
-    
-    def compute_MSMS(self, positions, radii, probe_radius, density, hdensity, do_ao):
-        verts = []
-        norms = []
-        faces = []
-        colors = []
-
-        msms_input = tempfile.NamedTemporaryFile(delete=False, suffix='.xyzr')
-        msms_output = tempfile.NamedTemporaryFile(delete=False, suffix='.out')
-        with open(msms_input.name, 'w') as msms_file:
-            for i in range(len(positions)):
-                msms_file.write("{0:.5f} {1:.5f} {2:.5f} {3:.5f}\n".format(-positions[i].x, positions[i].y, positions[i].z, radii[i]))
-        exePath = getMSMSExecutable()
-
-        subprocess.run(args=[exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", str(probe_radius), "-density", str(density), "-hdensity", str(hdensity), "-no_area", "-no_rest", "-no_header"])
-        if os.path.isfile(msms_output.name + ".vert") and os.path.isfile(msms_output.name + ".face"):
-            verts, norms, indices = parseVerticesNormals(msms_output.name + ".vert")
-            faces = parseFaces(msms_output.name + ".face")
+            verts, norms, tri = self.compute_MSMS(positions, radii, probe_radius, density, hdensity)
 
             if do_ao:
                 aoExePath = getAOEmbreeExecutable()
                 if aoExePath != "":
-                    colors = runAOEmbree(aoExePath, verts, norms, faces)
+                    cols = runAOEmbree(aoExePath, verts, norms, tri)
 
-        else:
-            Logs.error("Failed to run MSMS")
-        return (verts, norms, faces, colors)
+        self.__plugin.make_mesh(verts, norms, tri, cur_complex.index, cols)
+    
+    def compute_MSMS(self, positions, radii, probe_radius, density, hdensity):
+        verts = []
+        norms = []
+        faces = []
 
-
-    def compute_MSMS_part(self, positions, radii, probe_radius, density, hdensity):
         msms_input = tempfile.NamedTemporaryFile(delete=False, suffix='.xyzr')
         msms_output = tempfile.NamedTemporaryFile(delete=False, suffix='.out')
         with open(msms_input.name, 'w') as msms_file:
@@ -89,16 +72,13 @@ class MSMSProcess():
                 msms_file.write("{0:.5f} {1:.5f} {2:.5f} {3:.5f}\n".format(-positions[i].x, positions[i].y, positions[i].z, radii[i]))
         exePath = getMSMSExecutable()
 
-        verts = []
-        norms = []
-        faces = []
         subprocess.run(args=[exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", str(probe_radius), "-density", str(density), "-hdensity", str(hdensity), "-no_area", "-no_rest", "-no_header"])
         if os.path.isfile(msms_output.name + ".vert") and os.path.isfile(msms_output.name + ".face"):
             verts, norms, indices = parseVerticesNormals(msms_output.name + ".vert")
             faces = parseFaces(msms_output.name + ".face")
+
         else:
-            Logs.error("Failed to run MSMS\n")
-            self.stop_process()
+            Logs.error("Failed to run MSMS")
         return (verts, norms, faces)
 
     def add_to_mesh(self, v, n, t, verts, norms, tris):
@@ -167,6 +147,7 @@ def parseFaces(path):
 
 
 def runAOEmbree(exePath, verts, norms, faces, AO_steps = 512, AO_max_dist = 50.0):
+    Logs.debug("Run AOEmbree on ", len(verts)/3," vertices")
     #Write mesh to OBJ file
     ao_input = tempfile.NamedTemporaryFile(delete=False, suffix='.obj')
     with open(ao_input.name, "w") as f:
