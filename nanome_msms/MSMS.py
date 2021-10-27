@@ -1,8 +1,5 @@
 import nanome
-import os, math
-from nanome.util import Logs, ComplexUtils
 from nanome.api import shapes
-from sys import platform
 from ._MSMSProcess import MSMSProcess
 import numpy as np
 from functools import partial
@@ -10,7 +7,8 @@ from functools import partial
 class MSMS(nanome.PluginInstance):
 
     def start(self):
-        self._workspace_received = False
+        self._probe_radius = 1.4
+        self._list_complexes_received = False
         self.create_menu()
         self._process = MSMSProcess(self)
 
@@ -31,8 +29,8 @@ class MSMS(nanome.PluginInstance):
 
     def populate_objs(self):
         self.lst_obj.items.clear()
-        if self._workspace_received:
-            for c in self._current_workspace.complexes:
+        if self._list_complexes_received:
+            for c in self._list_complexes:
                 complex_name = c.name
                 item = nanome.ui.LayoutNode()
                 item.layout_orientation = nanome.ui.LayoutNode.LayoutTypes.horizontal
@@ -45,24 +43,23 @@ class MSMS(nanome.PluginInstance):
                 btn2.selected = True
                 ln_btn.horizontal_align = nanome.util.enums.HorizAlignOptions.Right
 
-                btn.register_pressed_callback(partial(self.call_msms_complex, c, btn2, 1.4))
+                btn.register_pressed_callback(partial(self.get_complex_call_msms, c.index, btn2, self._probe_radius))
                 self.lst_obj.items.append(item)
-                c.register_selection_changed_callback(self.ask_updated_worspace)
         self.update_content(self.lst_obj)
 
-    def ask_updated_worspace(self, compl):
-        self.on_run()
+    def get_complex_call_msms(self, complex_id, ao_button, probe_radius, button):
+        self.request_complexes([complex_id], partial(self.on_complex_received, ao_button.selected, probe_radius))
 
-    def call_msms_complex(self, cur_complex, ao_button, probe_radius, button):
-        self._process.start_process(cur_complex, do_ao = ao_button.selected, probe_radius = probe_radius)
+    def on_complex_received(self, ao, probe_radius, deep_complex):
+        self._process.start_process(deep_complex[0], do_ao = ao, probe_radius = probe_radius)
 
     def update(self):
-        if self._workspace_received and len(self.lst_obj.items) == 0:
+        if self._list_complexes_received and len(self.lst_obj.items) == 0:
             self.update_menu(self.menu)
             self.populate_objs()
 
     def on_run(self):
-        self.request_workspace(self.on_workspace_received)
+        self.request_complex_list(self.list_complexes)
         self.show_menu()
 
     def stop_msms(self):
@@ -93,10 +90,10 @@ class MSMS(nanome.PluginInstance):
         self.send_notification(nanome.util.enums.NotificationTypes.message, "Receiving mesh (" + str(len(mesh.vertices)/3) + " vertices)")
         mesh.upload()
 
-    def on_workspace_received(self, workspace):
+    def list_complexes(self, complexes):
         self.lst_obj.items.clear()
-        self._workspace_received = True
-        self._current_workspace = workspace
+        self._list_complexes_received = True
+        self._list_complexes = complexes
 
 def main():
     nanome.Plugin.setup("MSMS", "Run MSMS and load the molecular surface in Nanome.", "Computation", False, MSMS)

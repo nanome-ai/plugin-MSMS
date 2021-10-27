@@ -1,5 +1,5 @@
 import nanome
-from nanome.util import Logs, Process
+from nanome.util import Logs
 import tempfile, sys, subprocess, os
 
 class MSMSProcess():
