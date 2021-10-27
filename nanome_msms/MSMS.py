@@ -1,8 +1,5 @@
 import nanome
-import os, math
-from nanome.util import Logs, ComplexUtils
 from nanome.api import shapes
-from sys import platform
 from ._MSMSProcess import MSMSProcess
 import numpy as np
 from functools import partial
