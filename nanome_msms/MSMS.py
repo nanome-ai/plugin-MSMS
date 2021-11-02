@@ -51,7 +51,7 @@ class MSMS(nanome.AsyncPluginInstance):
     @async_callback
     async def get_complex_call_msms(self, complex_id, ao_button, probe_radius, button):
         deep = await self.request_complexes([complex_id])
-        await self._process.start_process(deep[0], do_ao = ao_button.selected, probe_radius = probe_radius)
+        self._process.start_process(deep[0], do_ao = ao_button.selected, probe_radius = probe_radius)
     
     @async_callback
     async def on_run(self):

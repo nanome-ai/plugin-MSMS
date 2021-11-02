@@ -9,7 +9,7 @@ class MSMSProcess():
         self._selected_only = True
         self._cut_per_chain = True
 
-    async def start_process(self, cur_complex, probe_radius = 1.4, density = 10.0, hdensity = 3.0, do_ao = True):
+    def start_process(self, cur_complex, probe_radius = 1.4, density = 10.0, hdensity = 3.0, do_ao = True):
         positions = []
         radii = []
         molecule = cur_complex._molecules[cur_complex.current_frame]
