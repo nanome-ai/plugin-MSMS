@@ -1,10 +1,11 @@
 import nanome
 from nanome.api import shapes
+from nanome.util import async_callback
 from ._MSMSProcess import MSMSProcess
 import numpy as np
 from functools import partial
 
-class MSMS(nanome.PluginInstance):
+class MSMS(nanome.AsyncPluginInstance):
 
     def start(self):
         self._probe_radius = 1.4
@@ -47,20 +48,20 @@ class MSMS(nanome.PluginInstance):
                 self.lst_obj.items.append(item)
         self.update_content(self.lst_obj)
 
-    def get_complex_call_msms(self, complex_id, ao_button, probe_radius, button):
-        self.request_complexes([complex_id], partial(self.on_complex_received, ao_button.selected, probe_radius))
-
-    def on_complex_received(self, ao, probe_radius, deep_complex):
-        self._process.start_process(deep_complex[0], do_ao = ao, probe_radius = probe_radius)
-
-    def update(self):
-        if self._list_complexes_received and len(self.lst_obj.items) == 0:
-            self.update_menu(self.menu)
-            self.populate_objs()
-
-    def on_run(self):
-        self.request_complex_list(self.list_complexes)
+    @async_callback
+    async def get_complex_call_msms(self, complex_id, ao_button, probe_radius, button):
+        deep = await self.request_complexes([complex_id])
+        self._process.start_process(deep[0], do_ao = ao_button.selected, probe_radius = probe_radius)
+    
+    @async_callback
+    async def on_run(self):
+        shallow = await self.request_complex_list()
+        self.lst_obj.items.clear()
+        self._list_complexes_received = True
+        self._list_complexes = shallow
         self.show_menu()
+        self.update_menu(self.menu)
+        self.populate_objs()
 
     def stop_msms(self):
         self._process.stop_process()
@@ -89,11 +90,6 @@ class MSMS(nanome.PluginInstance):
 
         self.send_notification(nanome.util.enums.NotificationTypes.message, "Receiving mesh (" + str(len(mesh.vertices)/3) + " vertices)")
         mesh.upload()
-
-    def list_complexes(self, complexes):
-        self.lst_obj.items.clear()
-        self._list_complexes_received = True
-        self._list_complexes = complexes
 
 def main():
     nanome.Plugin.setup("MSMS", "Run MSMS and load the molecular surface in Nanome.", "Computation", False, MSMS)
