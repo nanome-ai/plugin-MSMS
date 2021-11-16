@@ -69,7 +69,7 @@ class MSMSProcess():
         msms_output = tempfile.NamedTemporaryFile(delete=False, suffix='.out')
         with open(msms_input.name, 'w') as msms_file:
             for i in range(len(positions)):
-                msms_file.write("{0:.5f} {1:.5f} {2:.5f} {3:.5f}\n".format(-positions[i].x, positions[i].y, positions[i].z, radii[i]))
+                msms_file.write("{0:.5f} {1:.5f} {2:.5f} {3:.5f}\n".format(positions[i].x, positions[i].y, positions[i].z, radii[i]))
         exePath = getMSMSExecutable()
 
         subprocess.run(args=[exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", str(probe_radius), "-density", str(density), "-hdensity", str(hdensity), "-no_area", "-no_rest", "-no_header"])
@@ -124,8 +124,7 @@ def parseVerticesNormals(path):
                 continue
             s = l.split()
             v = [float(s[0]), float(s[1]), float(s[2])]
-            #Invert x for normals => Unity !
-            n = [-float(s[3]), float(s[4]), float(s[5])]
+            n = [float(s[3]), float(s[4]), float(s[5])]
             idx = int(s[7]) - 1
             verts += v
             norms += n
