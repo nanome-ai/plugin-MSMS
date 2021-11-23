@@ -1,11 +1,13 @@
-# Nanome - MSMS
+# Nanome - Molecular surface with MSMS
 
-A Nanome Plugin to run MSMS to compute molecular surfaces and load it in Nanome.
+A Nanome Plugin to run [MSMS](https://www.scripps.edu/sanner/html/msms_home.html) that computes molecular surfaces and load them in Nanome.
 (Molecular Surface by Michael Sanner)
 
-Optionally computes AO (Ambient Occlusion) for the computed meshes using https://github.com/nezix/AOEmbree
+Optionally, this plugin computes Ambient Occlusion (AO) to darken buried parts of the molecular surfaces using https://github.com/nezix/AOEmbree
 
-![image](https://user-images.githubusercontent.com/9949327/137134953-75b06353-2a60-44a2-9235-ee1589304da0.png)
+
+<img src="https://user-images.githubusercontent.com/9949327/143027625-b0ab5197-005e-49f9-9e31-6f8595d6800a.png" width="500"/>
+<img src="https://user-images.githubusercontent.com/9949327/137134953-75b06353-2a60-44a2-9235-ee1589304da0.png" width="200"/>
 
 ## Dependencies
 
