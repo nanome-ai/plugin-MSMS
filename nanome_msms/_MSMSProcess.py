@@ -6,13 +6,16 @@ import tempfile, sys, subprocess, os
 import numpy as np
 
 class MSMSInstance():
-    def __init__(self, plugin):
+    def __init__(self, plugin, complex):
         self.__plugin = plugin
+        self._complex = complex
 
-        self._complex = None
         self.nanome_mesh = None
+        self.is_shown = False
         #Compute Ambient Occlusion using AOEmbree
-        self._ao = True
+        self.ao = True
+        #Only compute for selected atoms
+        self.selected_only = True
         #Compute a mesh per chain
         self._by_chain = True
         self._probe_radius = 1.4
@@ -20,16 +23,23 @@ class MSMSInstance():
         self._msms_density = 10.0
         self._msms_hdensity = 3
         self._alpha = 255
+        self.atoms_to_process = 0
     
-    def set_complex(self, complex):
-        self._complex = complex
-    
+    def show(self, enabled = True):
+        if self.is_shown != enabled:
+            self.is_shown = enabled
+            if self.is_shown:
+                self.nanome_mesh.color = nanome.util.Color(255, 255, 255, self._alpha)
+            else:
+                self.nanome_mesh.color = nanome.util.Color(255, 255, 255, 0)
+            self.nanome_mesh.upload()
+
     def set_ao(self, new_ao):
-        if new_ao != self._ao:
-            self._ao = new_ao
+        if new_ao != self.ao:
+            self.ao = new_ao
             if self.nanome_mesh:
                 if new_ao:
-                    self.compute_AO(self._temp_mesh)
+                    self.compute_AO()
                     self.nanome_mesh.colors = np.asarray(self._temp_mesh["colors"])
                 else:
                     #Just clear current vertex colors
@@ -45,7 +55,10 @@ class MSMSInstance():
         if self._alpha != new_alpha:
             self._alpha = new_alpha
             if self.nanome_mesh:
-                self.nanome_mesh.color = nanome.util.Color(255, 255, 255, self._alpha)
+                if self.is_shown:
+                    self.nanome_mesh.color = nanome.util.Color(255, 255, 255, self._alpha)
+                else:
+                    self.nanome_mesh.color = nanome.util.Color(255, 255, 255, 0)
                 self.nanome_mesh.upload()
 
     def set_compute_by_chain(self, new_by_chain):
@@ -71,20 +84,22 @@ class MSMSInstance():
         else:
             self._temp_mesh = self.compute_whole_mesh(molecule)
 
-        if len(self._temp_mesh["vertices"]) > 0 and self._ao:
+        if len(self._temp_mesh["vertices"]) > 0 and self.ao:
             self.compute_AO()
 
         if len(self._temp_mesh["vertices"]) > 0:
             self.create_nanome_mesh()
         else:
             Logs.error("Failed to compute MSMS")
-            self.send_notification(nanome.util.enums.NotificationTypes.message, "MSMS failed")
+            self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "MSMS failed")
             return
         
-        self.send_notification(nanome.util.enums.NotificationTypes.message, "Receiving mesh (" + str(len(self.nanome_mesh.vertices)/3) + " vertices)")
+        self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Receiving mesh (" + str(len(self.nanome_mesh.vertices)/3) + " vertices)")
         self.nanome_mesh.upload()
+        self.is_shown = True
 
     def compute_mesh_by_chain(self, molecule):
+        self.atoms_to_process = 0
         result = {}
         result["vertices"] = []
         result["normals"] = []
@@ -95,15 +110,16 @@ class MSMSInstance():
             positions = []
             radii = []
             for atom in chain.atoms:
-                if not self._selected_only or atom.selected:
+                if not self.selected_only or atom.selected:
                     positions.append(atom.position)
                     radii.append(atom.vdw_radius)
                     count_atoms+=1
             if len(positions) != 0:
                 v, n, t = compute_MSMS(positions, radii, self._probe_radius, self._msms_density, self._msms_hdensity)
                 self.add_to_temp_mesh(result, v, n, t)
-        if count_atoms == 0 and self._selected_only:
+        if count_atoms == 0 and self.selected_only:
             self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Nothing is selected")
+        self.atoms_to_process = count_atoms
         return result
 
     def add_to_temp_mesh(self, temp_mesh, v, n, t):
@@ -114,6 +130,7 @@ class MSMSInstance():
             temp_mesh["triangles"].append(i + id_v)
 
     def compute_whole_mesh(self, molecule):
+        self.atoms_to_process = 0
         result = {}
         result["vertices"] = []
         result["normals"] = []
@@ -122,12 +139,16 @@ class MSMSInstance():
         positions = []
         radii = []
 
+        count_atoms = 0
         for atom in molecule.atoms:
-            if not self._selected_only or atom.selected:
+            if not self.selected_only or atom.selected:
                 positions.append(atom.position)
                 radii.append(atom.vdw_radius)
+                count_atoms+=1
 
-        if len(positions) == 0 and self._selected_only:
+        self.atoms_to_process = count_atoms
+
+        if len(positions) == 0 and self.selected_only:
             self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Nothing is selected")
             return
 
@@ -135,6 +156,7 @@ class MSMSInstance():
         result["vertices"] = verts
         result["normals"] = norms
         result["triangles"] = tri
+
         return result
 
     def compute_AO(self):
@@ -226,7 +248,11 @@ def parse_MSMS_Faces(path):
     return tris
 
 
-def run_AOEmbree(exePath, verts, norms, faces, AO_steps = 512, AO_max_dist = 50.0):
+def run_AOEmbree(exePath, temp_mesh, AO_steps = 512, AO_max_dist = 50.0):
+    verts = temp_mesh["vertices"]
+    norms = temp_mesh["normals"]
+    faces = temp_mesh["triangles"]
+
     Logs.debug("Run AOEmbree on ", len(verts)/3," vertices")
     #Write mesh to OBJ file
     ao_input = tempfile.NamedTemporaryFile(delete=False, suffix='.obj')
@@ -253,9 +279,3 @@ def run_AOEmbree(exePath, verts, norms, faces, AO_steps = 512, AO_max_dist = 50.
         Logs.warning("AO computation failed")
         return []
     return vertCol
-
-def run_AOEmbree(exePath, temp_mesh, AO_steps = 512, AO_max_dist = 50.0):
-    verts = temp_mesh["vertices"]
-    norms = temp_mesh["normals"]
-    faces = temp_mesh["triangles"]
-    return run_AOEmbree(exePath, verts, norms, faces, AO_steps, AO_max_dist)

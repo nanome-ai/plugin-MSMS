@@ -1,8 +1,7 @@
 import nanome
 from nanome.api import shapes
 from nanome.util import async_callback
-from ._MSMSProcess import MSMSProcess
-import numpy as np
+from ._MSMSProcess import MSMSInstance
 from functools import partial
 
 class MSMS(nanome.AsyncPluginInstance):
@@ -10,8 +9,8 @@ class MSMS(nanome.AsyncPluginInstance):
     def start(self):
         self._probe_radius = 1.4
         self._list_complexes_received = False
+        self._msms_instances = {}
         self.create_menu()
-        self._process = MSMSProcess(self)
 
     def create_menu(self):
         self.menu = nanome.ui.Menu()
@@ -44,15 +43,40 @@ class MSMS(nanome.AsyncPluginInstance):
                 btn2.selected = True
                 ln_btn.horizontal_align = nanome.util.enums.HorizAlignOptions.Right
 
-                btn.register_pressed_callback(partial(self.get_complex_call_msms, c.index, btn2, self._probe_radius))
+                btn.register_pressed_callback(partial(self.get_complex_call_msms, c.index, btn2))
+                btn2.register_pressed_callback(partial(self.set_ao, c.index))
                 self.lst_obj.items.append(item)
         self.update_content(self.lst_obj)
 
     @async_callback
-    async def get_complex_call_msms(self, complex_id, ao_button, probe_radius, button):
+    async def get_complex_call_msms(self, complex_id, ao_button, button):
         deep = await self.request_complexes([complex_id])
-        self._process.start_process(deep[0], do_ao = ao_button.selected, probe_radius = probe_radius)
-    
+        n_atoms, selected_atoms = count_selected_atoms(deep[0])
+
+        if complex_id in self._msms_instances: #already computed
+            msms = self._msms_instances[complex_id]
+            #Mesh needs update => selection changed
+            if msms.selected_only and msms.atoms_to_process != selected_atoms:
+                msms.compute_mesh()
+            #Mesh needs update => number of atoms changed
+            elif not msms.selected_only and msms.atoms_to_process != n_atoms:
+                msms.compute_mesh()
+            else:
+                #Show or hide
+                msms.show(not msms.is_shown)
+        else:
+            #Compute new mesh
+            msms = MSMSInstance(self, deep[0])
+            msms.set_ao(ao_button.selected)
+            msms.compute_mesh()
+            self._msms_instances[complex_id] = msms
+
+
+    def set_ao(self, complex_id, button):
+        if complex_id in self._msms_instances: #already computed
+            msms = self._msms_instances[complex_id]
+            msms.set_ao(button.selected)
+
     @async_callback
     async def on_run(self):
         shallow = await self.request_complex_list()
@@ -63,33 +87,21 @@ class MSMS(nanome.AsyncPluginInstance):
         self.update_menu(self.menu)
         self.populate_objs()
 
-    def stop_msms(self):
-        self._process.stop_process()
-
     def set_run_status(self, running):
         if running:
             self.set_plugin_list_button(nanome.util.enums.PluginListButtonType.run, "Stop")
         else:
             self.set_plugin_list_button(nanome.util.enums.PluginListButtonType.run, "Run")
 
-    def make_mesh(self, v, n, t, complexIdex, colors = []):
-        #Create nanome shape
-        mesh = shapes.Mesh()
-        mesh.vertices = np.asarray(v).flatten()
-        mesh.normals = np.asarray(n).flatten()
-        mesh.triangles = np.asarray(t).flatten()
-        if len(colors) == 0:
-            mesh.colors = np.repeat([1.0, 1.0, 1.0, 1.0], len(mesh.vertices) / 3)
-        else:
-            mesh.colors = np.asarray(colors)
-        mesh.anchors[0].anchor_type = nanome.util.enums.ShapeAnchorType.Complex
-        mesh.anchors[0].position = nanome.util.Vector3(0, 0, 0)
-        mesh.anchors[0].target = complexIdex
-        mesh.color = nanome.util.Color(255, 255, 255, 255)
-        mesh.uv = np.repeat([0.0, 0.0], len(mesh.vertices) / 3)
-
-        self.send_notification(nanome.util.enums.NotificationTypes.message, "Receiving mesh (" + str(len(mesh.vertices)/3) + " vertices)")
-        mesh.upload()
+def count_selected_atoms(complex):
+    molecule = complex._molecules[complex.current_frame]
+    count = 0
+    count_selected = 0
+    for a in molecule.atoms:
+        count += 1
+        if a.selected:
+            count_selected += 1
+    return count, count_selected
 
 def main():
     nanome.Plugin.setup("MSMS", "Run MSMS and load the molecular surface in Nanome.", "Computation", False, MSMS)
