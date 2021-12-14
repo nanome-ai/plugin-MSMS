@@ -1,5 +1,5 @@
 import nanome
-from nanome.util import Logs
+from nanome.util import Logs, asyncio
 from nanome.api.shapes import Shape, Mesh
 from nanome.api import shapes
 import tempfile, sys, subprocess, os
@@ -16,6 +16,12 @@ class MSMSInstance():
         self.ao = True
         #Only compute for selected atoms
         self.selected_only = True
+
+        self.atoms_to_process = 0
+        
+        #Wait to compute a new mesh until mesh is uploaded
+        self._is_computing = False
+
         #Compute a mesh per chain
         self._by_chain = True
         self._probe_radius = 1.4
@@ -23,8 +29,7 @@ class MSMSInstance():
         self._msms_density = 10.0
         self._msms_hdensity = 3
         self._alpha = 255
-        self.atoms_to_process = 0
-    
+
     def show(self, enabled = True):
         if self.is_shown != enabled:
             self.is_shown = enabled
@@ -32,26 +37,39 @@ class MSMSInstance():
                 self.nanome_mesh.color = nanome.util.Color(255, 255, 255, self._alpha)
             else:
                 self.nanome_mesh.color = nanome.util.Color(255, 255, 255, 0)
-            self.nanome_mesh.upload()
+            self.upload_mesh()
 
-    def set_ao(self, new_ao):
+    def done_uploading(self, m):
+        self._is_computing = False
+    
+    def upload_mesh(self):
+        self.nanome_mesh.upload(self.done_uploading)
+
+    def destroy_mesh(self):
+        if self.nanome_mesh:
+            self.nanome_mesh.destroy()
+        self.nanome_mesh = None
+        self._temp_mesh = None
+
+    async def set_ao(self, new_ao):
         if new_ao != self.ao:
             self.ao = new_ao
             if self.nanome_mesh:
+                self._is_computing = True
                 if new_ao:
                     self.compute_AO()
                     self.nanome_mesh.colors = np.asarray(self._temp_mesh["colors"])
                 else:
                     #Just clear current vertex colors
                     self.nanome_mesh.colors = np.repeat([1.0, 1.0, 1.0, 1.0], len(self.nanome_mesh.vertices) / 3)
-                self.nanome_mesh.upload()
+                self.upload_mesh()
 
-    def set_probe_radius(self, new_radius):
+    async def set_probe_radius(self, new_radius):
         if self._probe_radius != new_radius:
             self._probe_radius = new_radius
-            self.compute_mesh()
+            await self.compute_mesh()
     
-    def set_alpha(self, new_alpha):
+    async def set_alpha(self, new_alpha):
         if self._alpha != new_alpha:
             self._alpha = new_alpha
             if self.nanome_mesh:
@@ -59,51 +77,62 @@ class MSMSInstance():
                     self.nanome_mesh.color = nanome.util.Color(255, 255, 255, self._alpha)
                 else:
                     self.nanome_mesh.color = nanome.util.Color(255, 255, 255, 0)
-                self.nanome_mesh.upload()
+                self.upload_mesh()
 
-    def set_compute_by_chain(self, new_by_chain):
+    async def set_compute_by_chain(self, new_by_chain):
         if self._by_chain != new_by_chain:
             self._by_chain = new_by_chain
-            self.compute_mesh()
+            await self.compute_mesh()
     
-    def set_MSMS_quality(self, density, hdensity):
+    async def set_selected_only(self, new_selected_only):
+        if self.selected_only != new_selected_only:
+            self.selected_only = new_selected_only
+            await self.compute_mesh()
+
+    async def set_MSMS_quality(self, density, hdensity):
         if self._msms_density != density or self._msms_hdensity != hdensity:
             self._msms_density = density
             self._msms_hdensity = hdensity
-            self.compute_mesh()
+            await self.compute_mesh()
 
-    def compute_mesh(self):
-        if self.nanome_mesh:
-            self.nanome_mesh.destroy()
-            self.nanome_mesh = None
+    async def finished_uploading(self):
+        while self._is_computing:
+            await asyncio.sleep(0.1)
+
+    async def compute_mesh(self):
+        await self.finished_uploading()
+
+        self._is_computing = True
+        self.destroy_mesh()
 
         molecule = self._complex._molecules[self._complex.current_frame]
 
         if self._by_chain and len(list(molecule.chains)) > 0:
-            self._temp_mesh = self.compute_mesh_by_chain(molecule)
+            self._temp_mesh = self._compute_mesh_by_chain(molecule)
         else:
-            self._temp_mesh = self.compute_whole_mesh(molecule)
+            self._temp_mesh = self._compute_whole_mesh(molecule)
 
         if len(self._temp_mesh["vertices"]) > 0 and self.ao:
             self.compute_AO()
 
         if len(self._temp_mesh["vertices"]) > 0:
-            self.create_nanome_mesh()
+            self._create_nanome_mesh()
         else:
             Logs.error("Failed to compute MSMS")
             self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "MSMS failed")
             return
         
         self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Receiving mesh (" + str(len(self.nanome_mesh.vertices)/3) + " vertices)")
-        self.nanome_mesh.upload()
+        self.upload_mesh()
         self.is_shown = True
 
-    def compute_mesh_by_chain(self, molecule):
+    def _compute_mesh_by_chain(self, molecule):
         self.atoms_to_process = 0
         result = {}
         result["vertices"] = []
         result["normals"] = []
         result["triangles"] = []
+        result["colors"] = []
 
         count_atoms = 0
         for chain in molecule.chains:
@@ -116,25 +145,26 @@ class MSMSInstance():
                     count_atoms+=1
             if len(positions) != 0:
                 v, n, t = compute_MSMS(positions, radii, self._probe_radius, self._msms_density, self._msms_hdensity)
-                self.add_to_temp_mesh(result, v, n, t)
+                self._add_to_temp_mesh(result, v, n, t)
         if count_atoms == 0 and self.selected_only:
             self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Nothing is selected")
         self.atoms_to_process = count_atoms
         return result
 
-    def add_to_temp_mesh(self, temp_mesh, v, n, t):
+    def _add_to_temp_mesh(self, temp_mesh, v, n, t):
         id_v = int(len(temp_mesh["vertices"]) / 3)
         temp_mesh["vertices"] += v
         temp_mesh["normals"] += n
         for i in t:
             temp_mesh["triangles"].append(i + id_v)
 
-    def compute_whole_mesh(self, molecule):
+    def _compute_whole_mesh(self, molecule):
         self.atoms_to_process = 0
         result = {}
         result["vertices"] = []
         result["normals"] = []
         result["triangles"] = []
+        result["colors"] = []
 
         positions = []
         radii = []
@@ -166,7 +196,7 @@ class MSMSInstance():
             cols = run_AOEmbree(aoExePath, self._temp_mesh)
         self._temp_mesh["colors"] = cols
     
-    def create_nanome_mesh(self):
+    def _create_nanome_mesh(self):
         self.nanome_mesh = shapes.Mesh()
         self.nanome_mesh.vertices = np.asarray(self._temp_mesh["vertices"]).flatten()
         self.nanome_mesh.normals = np.asarray(self._temp_mesh["normals"]).flatten()
