@@ -136,9 +136,7 @@ class MSMSInstance():
 
     def count_selected_atoms(self, mol):
         count_atoms = 0
-        for chain in molecule.chains:
-            positions = []
-            radii = []
+        for chain in mol.chains:
             for atom in chain.atoms:
                 if not self.selected_only or atom.selected:
                     count_atoms+=1
