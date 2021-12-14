@@ -39,15 +39,63 @@ class MSMS(nanome.AsyncPluginInstance):
                 btn_ln = item.create_child_node()
                 btn = btn_ln.add_new_button(complex_name)
                 ln_btn = item.create_child_node()
-                ln_btn.set_padding(left=0.13)
+                # ln_btn.set_padding(left=0.13)
                 ln_btn.forward_dist = 0.001
                 btn2 = ln_btn.add_new_toggle_switch("AO")
                 btn2.selected = True
-                ln_btn.horizontal_align = nanome.util.enums.HorizAlignOptions.Right
+
+                item2 = nanome.ui.LayoutNode()
+                item2.layout_orientation = nanome.ui.LayoutNode.LayoutTypes.horizontal
+
+                #Opacity slider
+                ln_labelsld = item.create_child_node()
+                ln_sld = item.create_child_node()
+                lblsld = ln_labelsld.add_new_label("Opacity")
+                lblsld.text_auto_size = False
+                lblsld.text_size = 0.3
+                lblsld.text_horizontal_align = nanome.util.enums.HorizAlignOptions.Right
+                lblsld.text_vertical_align = nanome.util.enums.VertAlignOptions.Middle
+                sld = ln_sld.add_new_slider(0, 255, 255)
+
+                #Probe radius slider
+                ln_labelsld2 = item2.create_child_node()
+                ln_sld2 = item2.create_child_node()
+                lbl2 = ln_labelsld2.add_new_label("Probe radius")
+                lbl2.text_auto_size = False
+                lbl2.text_size = 0.25
+                lbl2.forward_dist = 0.001
+                sld2 = ln_sld2.add_new_slider(0.8, 2.5, 1.4)
+
+                #Selected atoms only
+                ln_btn3 = item2.create_child_node()
+                btn4 = ln_btn3.add_new_toggle_switch("Selection")
+                btn4.selected = True
+                btn4.text.auto_size = False
+                btn4.text.size = 0.2
+                ln_btn3.forward_dist = 0.001
+
+                #One mesh per chain
+                ln_btn5 = item2.create_child_node()
+                btn5 = ln_btn5.add_new_toggle_switch("By chain")
+                btn5.selected = True
+                btn5.text.auto_size = False
+                btn5.text.size = 0.2
+                ln_btn5.forward_dist = 0.001
+
+                #hdensity slider
+                # ln_sld3 = item.create_child_node()
+                # sld3 = ln_sld3.add_new_slider(0, 20, 10)
+                # sld3.register_released_callback(partial(self.set_msms_quality, c.index))
 
                 btn.register_pressed_callback(partial(self.get_complex_call_msms, c.index, btn2))
                 btn2.register_pressed_callback(partial(self.set_ao, c.index))
+                btn5.register_pressed_callback(partial(self.set_by_chain, c.index))
+                btn4.register_pressed_callback(partial(self.set_selected_only, c.index))
+                sld.register_released_callback(partial(self.set_opacity, c.index))
+                sld2.register_released_callback(partial(self.set_probe_radius, c.index))
+
                 self.lst_obj.items.append(item)
+                self.lst_obj.items.append(item2)
         self.update_content(self.lst_obj)
 
     @async_callback
@@ -55,8 +103,18 @@ class MSMS(nanome.AsyncPluginInstance):
         deep = await self.request_complexes([complex_id])
         n_atoms, selected_atoms = count_selected_atoms(deep[0])
 
-        if complex_id in self._msms_instances: #already computed
-            msms = self._msms_instances[complex_id]
+        if not complex_id in self._msms_instances:
+            #Compute new mesh
+            msms = MSMSInstance(self, deep[0])
+            t = asyncio.create_task(msms.compute_mesh())
+            self._msms_instances[complex_id] = msms
+            self._msms_tasks[complex_id] = t
+            await t
+            await msms.set_ao(ao_button.selected)
+            return
+
+        msms = self._msms_instances[complex_id]
+        if self._msms_instances[complex_id].nanome_mesh: #already computed
             t = self._msms_tasks[complex_id]
             #Mesh needs update => selection changed
             if msms.selected_only and msms.atoms_to_process != selected_atoms:
@@ -77,26 +135,44 @@ class MSMS(nanome.AsyncPluginInstance):
             else:
                 #Show or hide
                 msms.show(not msms.is_shown)
-        else:
-            #Compute new mesh
-            msms = MSMSInstance(self, deep[0])
-            t = asyncio.create_task(msms.compute_mesh())
-            self._msms_instances[complex_id] = msms
-            self._msms_tasks[complex_id] = t
-            await t
-            await msms.set_ao(ao_button.selected)
+        else: #Not computed but instance exists
+            t = self._msms_tasks[complex_id]
+            if not t.done():
+                t.cancel()
+                msms.destroy_mesh()
+            #Compute new mesh with existing instance
+            new_task = asyncio.create_task(msms.compute_mesh())
+            self._msms_tasks[complex_id] = new_task
+            await new_task
             
 
     @async_callback
     async def set_ao(self, complex_id, button):
-        if complex_id in self._msms_instances: #already computed
-            msms = self._msms_instances[complex_id]
-            await msms.set_ao(button.selected)
+        if not complex_id in self._msms_instances:
+            deep = await self.request_complexes([complex_id])
+            msms = MSMSInstance(self, deep[0])
+            self._msms_instances[complex_id] = msms
+            t = asyncio.create_task(msms.set_ao(button.selected))
+            self._msms_tasks[complex_id] = t
+            await t
+            return
+        
+        msms = self._msms_instances[complex_id]
+        await msms.set_ao(button.selected)
 
     @async_callback
     async def set_by_chain(self, complex_id, button):
-        if complex_id in self._msms_instances: #already computed
-            msms = self._msms_instances[complex_id]
+        if not complex_id in self._msms_instances:
+            deep = await self.request_complexes([complex_id])
+            msms = MSMSInstance(self, deep[0])
+            self._msms_instances[complex_id] = msms
+            t = asyncio.create_task(msms.set_compute_by_chain(button.selected, recompute=False))
+            self._msms_tasks[complex_id] = t
+            await t
+            return
+
+        msms = self._msms_instances[complex_id]
+        if self._msms_instances[complex_id].nanome_mesh: #already computed
             t = self._msms_tasks[complex_id]
             if not t.done():
                 t.cancel()
@@ -105,10 +181,23 @@ class MSMS(nanome.AsyncPluginInstance):
             self._msms_tasks[complex_id] = t
             await t
 
+        else: #Not computed but instance exists
+            await msms.set_compute_by_chain(button.selected, recompute=False)
+
+
     @async_callback
     async def set_selected_only(self, complex_id, button):
-        if complex_id in self._msms_instances: #already computed
-            msms = self._msms_instances[complex_id]
+        if not complex_id in self._msms_instances:
+            deep = await self.request_complexes([complex_id])
+            msms = MSMSInstance(self, deep[0])
+            self._msms_instances[complex_id] = msms
+            t = asyncio.create_task(msms.set_selected_only(button.selected, recompute=False))
+            self._msms_tasks[complex_id] = t
+            await t
+            return
+
+        msms = self._msms_instances[complex_id]
+        if self._msms_instances[complex_id].nanome_mesh: #already computed
             t = self._msms_tasks[complex_id]
             if not t.done():
                 t.cancel()
@@ -116,11 +205,23 @@ class MSMS(nanome.AsyncPluginInstance):
             t = asyncio.create_task(msms.set_selected_only(button.selected))
             self._msms_tasks[complex_id] = t
             await t
+        else: #Not computed but instance exists
+            await msms.set_selected_only(button.selected, recompute=False)
+
         
     @async_callback
     async def set_msms_quality(self, complex_id, slider):
-        if complex_id in self._msms_instances: #already computed
-            msms = self._msms_instances[complex_id]
+        if not complex_id in self._msms_instances:
+            deep = await self.request_complexes([complex_id])
+            msms = MSMSInstance(self, deep[0])
+            self._msms_instances[complex_id] = msms
+            t = asyncio.create_task(msms.set_MSMS_quality(slider.current_value, msms._msms_hdensity, recompute=False))
+            self._msms_tasks[complex_id] = t
+            await t
+            return
+
+        msms = self._msms_instances[complex_id]
+        if self._msms_instances[complex_id].nanome_mesh: #already computed
             t = self._msms_tasks[complex_id]
             if not t.done():
                 t.cancel()
@@ -128,6 +229,40 @@ class MSMS(nanome.AsyncPluginInstance):
             t = asyncio.create_task(msms.set_MSMS_quality(slider.current_value, msms._msms_hdensity))
             self._msms_tasks[complex_id] = t
             await t
+        else: #Not computed but instance exists
+            await msms.set_MSMS_quality(slider.current_value, msms._msms_hdensity, recompute=False)
+
+
+    @async_callback
+    async def set_probe_radius(self, complex_id, slider):
+        if not complex_id in self._msms_instances:
+            deep = await self.request_complexes([complex_id])
+            msms = MSMSInstance(self, deep[0])
+            self._msms_instances[complex_id] = msms
+            t = asyncio.create_task(msms.set_probe_radius(slider.current_value, recompute=False))
+            self._msms_tasks[complex_id] = t
+            await t
+            return
+        
+        msms = self._msms_instances[complex_id]
+        if self._msms_instances[complex_id].nanome_mesh: #already computed
+            msms = self._msms_instances[complex_id]
+            t = self._msms_tasks[complex_id]
+            if not t.done():
+                t.cancel()
+                msms.destroy_mesh()
+            t = asyncio.create_task(msms.set_probe_radius(slider.current_value))
+            self._msms_tasks[complex_id] = t
+            await t
+        else: #Not computed but instance exists
+            await msms.set_probe_radius(slider.current_value, recompute=False)
+
+
+    @async_callback
+    async def set_opacity(self, complex_id, slider):
+        if complex_id in self._msms_instances and self._msms_instances[complex_id].nanome_mesh: #already computed
+            msms = self._msms_instances[complex_id]
+            await msms.set_alpha(slider.current_value)
 
     @async_callback
     async def on_run(self):
@@ -138,24 +273,6 @@ class MSMS(nanome.AsyncPluginInstance):
         self.show_menu()
         self.update_menu(self.menu)
         self.populate_objs()
-
-    @async_callback
-    async def set_opacity(self, complex_id, slider):
-        if complex_id in self._msms_instances: #already computed
-            msms = self._msms_instances[complex_id]
-            await msms.set_alpha(slider.current_value)
-    
-    @async_callback
-    async def set_probe_radius(self, complex_id, slider):
-        if complex_id in self._msms_instances: #already computed
-            msms = self._msms_instances[complex_id]
-            t = self._msms_tasks[complex_id]
-            if not t.done():
-                t.cancel()
-                msms.destroy_mesh()
-            t = asyncio.create_task(msms.set_probe_radius(slider.current_value))
-            self._msms_tasks[complex_id] = t
-            await t
 
     def set_run_status(self, running):
         if running:

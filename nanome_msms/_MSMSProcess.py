@@ -1,8 +1,9 @@
 import nanome
-from nanome.util import Logs, asyncio
+from nanome.util import Logs
 from nanome.api import shapes
 import tempfile, sys, subprocess, os
 import numpy as np
+import asyncio
 
 class MSMSInstance():
     def __init__(self, plugin, complex):
@@ -32,6 +33,8 @@ class MSMSInstance():
         self._custom_quality = False
 
     def show(self, enabled = True):
+        if not self.nanome_mesh:
+            return
         if self.is_shown != enabled:
             self.is_shown = enabled
             if self.is_shown:
@@ -51,6 +54,7 @@ class MSMSInstance():
             self.nanome_mesh.destroy()
         self.nanome_mesh = None
         self._temp_mesh = None
+        self._is_computing = False
 
     async def set_ao(self, new_ao):
         if new_ao != self.ao:
@@ -65,10 +69,11 @@ class MSMSInstance():
                     self.nanome_mesh.colors = np.repeat([1.0, 1.0, 1.0, 1.0], len(self.nanome_mesh.vertices) / 3)
                 self.upload_mesh()
 
-    async def set_probe_radius(self, new_radius):
+    async def set_probe_radius(self, new_radius, recompute=True):
         if self._probe_radius != new_radius:
             self._probe_radius = new_radius
-            await self.compute_mesh()
+            if recompute:
+                await self.compute_mesh()
     
     async def set_alpha(self, new_alpha):
         if self._alpha != new_alpha:
@@ -80,22 +85,25 @@ class MSMSInstance():
                     self.nanome_mesh.color = nanome.util.Color(255, 255, 255, 0)
                 self.upload_mesh()
 
-    async def set_compute_by_chain(self, new_by_chain):
+    async def set_compute_by_chain(self, new_by_chain, recompute=True):
         if self._by_chain != new_by_chain:
             self._by_chain = new_by_chain
-            await self.compute_mesh()
+            if recompute:
+                await self.compute_mesh()
     
-    async def set_selected_only(self, new_selected_only):
+    async def set_selected_only(self, new_selected_only, recompute=True):
         if self.selected_only != new_selected_only:
             self.selected_only = new_selected_only
-            await self.compute_mesh()
+            if recompute:
+                await self.compute_mesh()
 
-    async def set_MSMS_quality(self, density, hdensity):
+    async def set_MSMS_quality(self, density, hdensity, recompute=True):
         if self._msms_density != density or self._msms_hdensity != hdensity:
             self._msms_density = density
             self._msms_hdensity = hdensity
             self._custom_quality = True
-            await self.compute_mesh()
+            if recompute:
+                await self.compute_mesh()
 
     async def finished_uploading(self):
         while self._is_computing:
@@ -104,8 +112,10 @@ class MSMSInstance():
     async def compute_mesh(self):
         await self.finished_uploading()
 
-        self._is_computing = True
         self.destroy_mesh()
+        self._is_computing = True
+
+        Logs.debug("Computing MSMS mesh with: AO:{0} | ByChain:{1} | Selection:{2} | ProbeRadius:{3}".format(self.ao, self._by_chain, self.selected_only, self._probe_radius))
 
         molecule = self._complex._molecules[self._complex.current_frame]
 
@@ -121,6 +131,7 @@ class MSMSInstance():
             self._create_nanome_mesh()
         else:
             Logs.error("Failed to compute MSMS")
+            self.destroy_mesh()
             self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "MSMS failed")
             return
         
@@ -154,7 +165,7 @@ class MSMSInstance():
 
         if self.atoms_to_process == 0 and self.selected_only:
             self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Nothing is selected")
-            return
+            return result
 
         if not self._custom_quality:
             self.auto_MSMS_quality(self.atoms_to_process)
@@ -201,7 +212,7 @@ class MSMSInstance():
 
         if len(positions) == 0 and self.selected_only:
             self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Nothing is selected")
-            return
+            return result
 
         if not self._custom_quality:
             self.auto_MSMS_quality(self.atoms_to_process)
