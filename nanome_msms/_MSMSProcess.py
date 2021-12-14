@@ -1,6 +1,5 @@
 import nanome
 from nanome.util import Logs, asyncio
-from nanome.api.shapes import Shape, Mesh
 from nanome.api import shapes
 import tempfile, sys, subprocess, os
 import numpy as np
@@ -18,7 +17,7 @@ class MSMSInstance():
         self.selected_only = True
 
         self.atoms_to_process = 0
-        
+
         #Wait to compute a new mesh until mesh is uploaded
         self._is_computing = False
 
@@ -29,6 +28,8 @@ class MSMSInstance():
         self._msms_density = 10.0
         self._msms_hdensity = 3
         self._alpha = 255
+
+        self._custom_quality = False
 
     def show(self, enabled = True):
         if self.is_shown != enabled:
@@ -93,6 +94,7 @@ class MSMSInstance():
         if self._msms_density != density or self._msms_hdensity != hdensity:
             self._msms_density = density
             self._msms_hdensity = hdensity
+            self._custom_quality = True
             await self.compute_mesh()
 
     async def finished_uploading(self):
@@ -126,6 +128,22 @@ class MSMSInstance():
         self.upload_mesh()
         self.is_shown = True
 
+    def auto_MSMS_quality(self, N):
+        if N > 5000:
+            self._msms_hdensity = 3.0
+        if N > 20000:
+            self._msms_hdensity = 1.0
+
+    def count_selected_atoms(self, mol):
+        count_atoms = 0
+        for chain in molecule.chains:
+            positions = []
+            radii = []
+            for atom in chain.atoms:
+                if not self.selected_only or atom.selected:
+                    count_atoms+=1
+        return count_atoms
+
     def _compute_mesh_by_chain(self, molecule):
         self.atoms_to_process = 0
         result = {}
@@ -134,7 +152,15 @@ class MSMSInstance():
         result["triangles"] = []
         result["colors"] = []
 
-        count_atoms = 0
+        self.atoms_to_process = self.count_selected_atoms(molecule)
+
+        if self.atoms_to_process == 0 and self.selected_only:
+            self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Nothing is selected")
+            return
+
+        if not self._custom_quality:
+            self.auto_MSMS_quality(self.atoms_to_process)
+
         for chain in molecule.chains:
             positions = []
             radii = []
@@ -142,13 +168,10 @@ class MSMSInstance():
                 if not self.selected_only or atom.selected:
                     positions.append(atom.position)
                     radii.append(atom.vdw_radius)
-                    count_atoms+=1
             if len(positions) != 0:
                 v, n, t = compute_MSMS(positions, radii, self._probe_radius, self._msms_density, self._msms_hdensity)
                 self._add_to_temp_mesh(result, v, n, t)
-        if count_atoms == 0 and self.selected_only:
-            self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Nothing is selected")
-        self.atoms_to_process = count_atoms
+
         return result
 
     def _add_to_temp_mesh(self, temp_mesh, v, n, t):
@@ -181,6 +204,9 @@ class MSMSInstance():
         if len(positions) == 0 and self.selected_only:
             self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Nothing is selected")
             return
+
+        if not self._custom_quality:
+            self.auto_MSMS_quality(self.atoms_to_process)
 
         verts, norms, tri = compute_MSMS(positions, radii, self._probe_radius, self._msms_density, self._msms_hdensity)
         result["vertices"] = verts
