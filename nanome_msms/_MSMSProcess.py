@@ -1,6 +1,7 @@
 import nanome
 from nanome.util import Logs
 from nanome.api import shapes
+from nanome.api.shapes import Shape
 import tempfile, sys, subprocess, os
 import numpy as np
 import asyncio
@@ -20,7 +21,7 @@ class MSMSInstance():
         self.atoms_to_process = 0
 
         #Wait to compute a new mesh until mesh is uploaded
-        self._is_computing = False
+        self._is_busy = False
 
         #Compute a mesh per chain
         self._by_chain = True
@@ -28,39 +29,57 @@ class MSMSInstance():
         #MSMS meshing quality settings
         self._msms_density = 10.0
         self._msms_hdensity = 3
+
         self._alpha = 255
+        self._colorv3 = nanome.util.Vector3(255, 255, 255)
 
         self._custom_quality = False
 
-    def show(self, enabled = True):
+    async def show(self, enabled = True):
         if not self.nanome_mesh:
             return
         if self.is_shown != enabled:
             self.is_shown = enabled
             if self.is_shown:
-                self.nanome_mesh.color = nanome.util.Color(255, 255, 255, self._alpha)
+                self.nanome_mesh.color = nanome.util.Color(self._colorv3.x, self._colorv3.y, self._colorv3.z, self._alpha)
             else:
-                self.nanome_mesh.color = nanome.util.Color(255, 255, 255, 0)
+                self.nanome_mesh.color = nanome.util.Color(self._colorv3.x, self._colorv3.y, self._colorv3.z, 0)
+            await self.finished()
             self.upload_mesh()
 
-    def done_uploading(self, m):
-        self._is_computing = False
+    async def set_color(self, new_color):
+        if len(new_color) != 3:
+            print("Color has to be an array of 3 int")
+            return
+        if new_color[0] != self._colorv3.x or new_color[1] != self._colorv3.y or new_color[2] != self._colorv3.z:
+            self._colorv3 = nanome.util.Vector3(new_color[0], new_color[1], new_color[2])
+            if self.nanome_mesh:
+                if self.is_shown:
+                    self.nanome_mesh.color = nanome.util.Color(self._colorv3.x, self._colorv3.y, self._colorv3.z, self._alpha)
+                else:
+                    self.nanome_mesh.color = nanome.util.Color(self._colorv3.x, self._colorv3.y, self._colorv3.z, 0)
+                await self.finished()
+                self.upload_mesh()
+
+    def done_upload(self, m):
+        self._is_busy = False
+    
+    def done_destroy(self, m):
+        self._is_busy = False
+        self.nanome_mesh = None
     
     def upload_mesh(self):
-        self.nanome_mesh.upload(self.done_uploading)
+        self.nanome_mesh.upload(self.done_upload)
 
     def destroy_mesh(self):
         if self.nanome_mesh:
-            self.nanome_mesh.destroy()
-        self.nanome_mesh = None
+            Shape.destroy_multiple([self.nanome_mesh], self.done_destroy)
         self._temp_mesh = None
-        self._is_computing = False
 
     async def set_ao(self, new_ao):
         if new_ao != self.ao:
             self.ao = new_ao
             if self.nanome_mesh:
-                self._is_computing = True
                 if new_ao:
                     self.compute_AO()
                     self.nanome_mesh.colors = np.asarray(self._temp_mesh["colors"])
@@ -80,9 +99,10 @@ class MSMSInstance():
             self._alpha = new_alpha
             if self.nanome_mesh:
                 if self.is_shown:
-                    self.nanome_mesh.color = nanome.util.Color(255, 255, 255, self._alpha)
+                    self.nanome_mesh.color = nanome.util.Color(self._colorv3.x, self._colorv3.y, self._colorv3.z, self._alpha)
                 else:
-                    self.nanome_mesh.color = nanome.util.Color(255, 255, 255, 0)
+                    self.nanome_mesh.color = nanome.util.Color(self._colorv3.x, self._colorv3.y, self._colorv3.z, 0)
+                await self.finished()
                 self.upload_mesh()
 
     async def set_compute_by_chain(self, new_by_chain, recompute=True):
@@ -105,15 +125,26 @@ class MSMSInstance():
             if recompute:
                 await self.compute_mesh()
 
-    async def finished_uploading(self):
-        while self._is_computing:
-            await asyncio.sleep(0.1)
+    async def finished(self):
+        if not self._is_busy:
+            return
+        max_time = 60.0 * 5 #5 min
+        count_time = 0.0
+        step = 0.1
+        while self._is_busy:
+            await asyncio.sleep(step)
+            count_time += step
+            if count_time >= max_time:
+                return
 
     async def compute_mesh(self):
-        await self.finished_uploading()
-
+        #Wait for previous mesh to be computed if there is any
+        await self.finished()
         self.destroy_mesh()
-        self._is_computing = True
+        #Wait for the mesh to be destroy
+        await self.finished()
+
+        self._is_busy = True
 
         Logs.debug("Computing MSMS mesh with: AO:{0} | ByChain:{1} | Selection:{2} | ProbeRadius:{3}".format(self.ao, self._by_chain, self.selected_only, self._probe_radius))
 
@@ -138,6 +169,7 @@ class MSMSInstance():
         self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Receiving mesh (" + str(len(self.nanome_mesh.vertices)/3) + " vertices)")
         self.upload_mesh()
         self.is_shown = True
+        await self.finished()
 
     def auto_MSMS_quality(self, N):
         if N > 5000:
@@ -247,7 +279,7 @@ class MSMSInstance():
         self.nanome_mesh.anchors[0].anchor_type = nanome.util.enums.ShapeAnchorType.Complex
         self.nanome_mesh.anchors[0].position = nanome.util.Vector3(0, 0, 0)
         self.nanome_mesh.anchors[0].target = self._complex.index
-        self.nanome_mesh.color = nanome.util.Color(255, 255, 255, self._alpha)
+        self.nanome_mesh.color = nanome.util.Color(self._colorv3.x, self._colorv3.y, self._colorv3.z, self._alpha)
         self.nanome_mesh.uv = np.repeat([0.0, 0.0], len(self.nanome_mesh.vertices) / 3)
     
 def compute_MSMS(positions, radii, probe_radius, density, hdensity):
@@ -262,7 +294,9 @@ def compute_MSMS(positions, radii, probe_radius, density, hdensity):
             msms_file.write("{0:.5f} {1:.5f} {2:.5f} {3:.5f}\n".format(positions[i].x, positions[i].y, positions[i].z, radii[i]))
     exePath = get_MSMS_Executable()
 
-    subprocess.run(args=[exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", str(probe_radius), "-density", str(density), "-hdensity", str(hdensity), "-no_area", "-no_rest", "-no_header"])
+    subprocess.run(stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        args=[exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", str(probe_radius), "-density", str(density), "-hdensity", str(hdensity), "-no_area", "-no_rest", "-no_header"])
     if os.path.isfile(msms_output.name + ".vert") and os.path.isfile(msms_output.name + ".face"):
         verts, norms, indices = parse_MSMS_verts_norms(msms_output.name + ".vert")
         faces = parse_MSMS_Faces(msms_output.name + ".face")

@@ -113,6 +113,7 @@ class MSMS(nanome.AsyncPluginInstance):
             if msms.selected_only:
                 if not t.done():
                     t.cancel()
+                    await t
                     msms.destroy_mesh()
                 new_task = asyncio.create_task(msms.compute_mesh())
                 self._msms_tasks[complex_id] = new_task
@@ -134,12 +135,13 @@ class MSMS(nanome.AsyncPluginInstance):
             return
 
         msms = self._msms_instances[complex_id]
-        if self._msms_instances[complex_id].nanome_mesh: #already computed
+        if msms.nanome_mesh: #already computed
             t = self._msms_tasks[complex_id]
             #Mesh needs update => selection changed
             if msms.selected_only and msms.atoms_to_process != selected_atoms:
                 if not t.done():
                     t.cancel()
+                    await t
                     msms.destroy_mesh()
                 new_task = asyncio.create_task(msms.compute_mesh())
                 self._msms_tasks[complex_id] = new_task
@@ -148,17 +150,19 @@ class MSMS(nanome.AsyncPluginInstance):
             elif not msms.selected_only and msms.atoms_to_process != n_atoms:
                 if not t.done():
                     t.cancel()
+                    await t
                     msms.destroy_mesh()
                 new_task = asyncio.create_task(msms.compute_mesh())
                 self._msms_tasks[complex_id] = new_task
                 await new_task
             else:
                 #Show or hide
-                msms.show(not msms.is_shown)
+                await msms.show(not msms.is_shown)
         else: #Not computed but instance exists
             t = self._msms_tasks[complex_id]
             if not t.done():
                 t.cancel()
+                await t
                 msms.destroy_mesh()
             #Compute new mesh with existing instance
             new_task = asyncio.create_task(msms.compute_mesh())
@@ -192,10 +196,11 @@ class MSMS(nanome.AsyncPluginInstance):
             return
 
         msms = self._msms_instances[complex_id]
-        if self._msms_instances[complex_id].nanome_mesh: #already computed
+        if msms.nanome_mesh: #already computed
             t = self._msms_tasks[complex_id]
             if not t.done():
                 t.cancel()
+                await t
                 msms.destroy_mesh()
             t = asyncio.create_task(msms.set_compute_by_chain(button.selected))
             self._msms_tasks[complex_id] = t
@@ -217,10 +222,11 @@ class MSMS(nanome.AsyncPluginInstance):
             return
 
         msms = self._msms_instances[complex_id]
-        if self._msms_instances[complex_id].nanome_mesh: #already computed
+        if msms.nanome_mesh: #already computed
             t = self._msms_tasks[complex_id]
             if not t.done():
                 t.cancel()
+                await t
                 msms.destroy_mesh()
             t = asyncio.create_task(msms.set_selected_only(button.selected))
             self._msms_tasks[complex_id] = t
@@ -241,10 +247,11 @@ class MSMS(nanome.AsyncPluginInstance):
             return
 
         msms = self._msms_instances[complex_id]
-        if self._msms_instances[complex_id].nanome_mesh: #already computed
+        if msms.nanome_mesh: #already computed
             t = self._msms_tasks[complex_id]
             if not t.done():
                 t.cancel()
+                await t
                 msms.destroy_mesh()
             t = asyncio.create_task(msms.set_MSMS_quality(slider.current_value, msms._msms_hdensity))
             self._msms_tasks[complex_id] = t
@@ -259,23 +266,23 @@ class MSMS(nanome.AsyncPluginInstance):
             deep = await self.request_complexes([complex_id])
             msms = MSMSInstance(self, deep[0])
             self._msms_instances[complex_id] = msms
-            t = asyncio.create_task(msms.set_probe_radius(slider.current_value, recompute=False))
+            t = asyncio.create_task(msms.set_probe_radius(round(slider.current_value, 3), recompute=False))
             self._msms_tasks[complex_id] = t
             await t
             return
         
         msms = self._msms_instances[complex_id]
-        if self._msms_instances[complex_id].nanome_mesh: #already computed
-            msms = self._msms_instances[complex_id]
+        if msms.nanome_mesh: #already computed
             t = self._msms_tasks[complex_id]
             if not t.done():
                 t.cancel()
-                msms.destroy_mesh()
-            t = asyncio.create_task(msms.set_probe_radius(slider.current_value))
+                await t
+            msms.destroy_mesh()
+            t = asyncio.create_task(msms.set_probe_radius(round(slider.current_value, 3)))
             self._msms_tasks[complex_id] = t
             await t
         else: #Not computed but instance exists
-            await msms.set_probe_radius(slider.current_value, recompute=False)
+            await msms.set_probe_radius(round(slider.current_value, 3), recompute=False)
 
 
     @async_callback
