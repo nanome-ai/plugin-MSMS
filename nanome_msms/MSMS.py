@@ -96,7 +96,27 @@ class MSMS(nanome.AsyncPluginInstance):
 
                 self.lst_obj.items.append(item)
                 self.lst_obj.items.append(item2)
+
+                c.register_selection_changed_callback(self.selection_changed)
         self.update_content(self.lst_obj)
+
+    @async_callback
+    async def selection_changed(self, complex):
+        complex_id = complex.index
+        deep = await self.request_complexes([complex_id])
+
+        if complex_id in self._msms_instances:
+            msms = self._msms_instances[complex_id]
+            msms._complex = deep[0]
+            t = self._msms_tasks[complex_id]
+            #Mesh needs update => selection changed
+            if msms.selected_only:
+                if not t.done():
+                    t.cancel()
+                    msms.destroy_mesh()
+                new_task = asyncio.create_task(msms.compute_mesh())
+                self._msms_tasks[complex_id] = new_task
+                await new_task
 
     @async_callback
     async def get_complex_call_msms(self, complex_id, ao_button, button):
