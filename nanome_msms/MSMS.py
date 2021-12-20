@@ -131,7 +131,8 @@ class MSMS(nanome.AsyncPluginInstance):
             self._msms_instances[complex_id] = msms
             self._msms_tasks[complex_id] = t
             await t
-            await msms.set_ao(ao_button.selected)
+            if ao_button.selected:
+                await msms.set_ao(True)
             return
 
         msms = self._msms_instances[complex_id]
@@ -142,7 +143,6 @@ class MSMS(nanome.AsyncPluginInstance):
                 if not t.done():
                     t.cancel()
                     await t
-                    msms.destroy_mesh()
                 new_task = asyncio.create_task(msms.compute_mesh())
                 self._msms_tasks[complex_id] = new_task
                 await new_task
@@ -151,7 +151,6 @@ class MSMS(nanome.AsyncPluginInstance):
                 if not t.done():
                     t.cancel()
                     await t
-                    msms.destroy_mesh()
                 new_task = asyncio.create_task(msms.compute_mesh())
                 self._msms_tasks[complex_id] = new_task
                 await new_task
@@ -163,7 +162,6 @@ class MSMS(nanome.AsyncPluginInstance):
             if not t.done():
                 t.cancel()
                 await t
-                msms.destroy_mesh()
             #Compute new mesh with existing instance
             new_task = asyncio.create_task(msms.compute_mesh())
             self._msms_tasks[complex_id] = new_task
@@ -201,7 +199,6 @@ class MSMS(nanome.AsyncPluginInstance):
             if not t.done():
                 t.cancel()
                 await t
-                msms.destroy_mesh()
             t = asyncio.create_task(msms.set_compute_by_chain(button.selected))
             self._msms_tasks[complex_id] = t
             await t
@@ -227,7 +224,6 @@ class MSMS(nanome.AsyncPluginInstance):
             if not t.done():
                 t.cancel()
                 await t
-                msms.destroy_mesh()
             t = asyncio.create_task(msms.set_selected_only(button.selected))
             self._msms_tasks[complex_id] = t
             await t
@@ -252,7 +248,6 @@ class MSMS(nanome.AsyncPluginInstance):
             if not t.done():
                 t.cancel()
                 await t
-                msms.destroy_mesh()
             t = asyncio.create_task(msms.set_MSMS_quality(slider.current_value, msms._msms_hdensity))
             self._msms_tasks[complex_id] = t
             await t
@@ -277,7 +272,6 @@ class MSMS(nanome.AsyncPluginInstance):
             if not t.done():
                 t.cancel()
                 await t
-            msms.destroy_mesh()
             t = asyncio.create_task(msms.set_probe_radius(round(slider.current_value, 3)))
             self._msms_tasks[complex_id] = t
             await t

@@ -73,20 +73,23 @@ class MSMSInstance():
 
     def destroy_mesh(self):
         if self.nanome_mesh:
-            Shape.destroy_multiple([self.nanome_mesh], self.done_destroy)
+            self.nanome_mesh.destroy(self.done_destroy)
         self._temp_mesh = None
 
     async def set_ao(self, new_ao):
         if new_ao != self.ao:
             self.ao = new_ao
+            await self.finished()
             if self.nanome_mesh:
                 if new_ao:
+                    self._is_busy = True
                     self.compute_AO()
                     self.nanome_mesh.colors = np.asarray(self._temp_mesh["colors"])
                 else:
                     #Just clear current vertex colors
                     self.nanome_mesh.colors = np.repeat([1.0, 1.0, 1.0, 1.0], len(self.nanome_mesh.vertices) / 3)
                 self.upload_mesh()
+                await self.finished()
 
     async def set_probe_radius(self, new_radius, recompute=True):
         if self._probe_radius != new_radius:
@@ -97,13 +100,15 @@ class MSMSInstance():
     async def set_alpha(self, new_alpha):
         if self._alpha != new_alpha:
             self._alpha = new_alpha
+            await self.finished()
             if self.nanome_mesh:
+                self._is_busy = True
                 if self.is_shown:
                     self.nanome_mesh.color = nanome.util.Color(self._colorv3.x, self._colorv3.y, self._colorv3.z, self._alpha)
                 else:
                     self.nanome_mesh.color = nanome.util.Color(self._colorv3.x, self._colorv3.y, self._colorv3.z, 0)
-                await self.finished()
                 self.upload_mesh()
+                await self.finished()
 
     async def set_compute_by_chain(self, new_by_chain, recompute=True):
         if self._by_chain != new_by_chain:
@@ -141,7 +146,7 @@ class MSMSInstance():
         #Wait for previous mesh to be computed if there is any
         await self.finished()
         self.destroy_mesh()
-        #Wait for the mesh to be destroy
+        #Wait for the mesh to be destroyed
         await self.finished()
 
         self._is_busy = True
