@@ -176,7 +176,11 @@ class MSMSInstance():
             for atom in chain.atoms:
                 if not self.selected_only or atom.selected:
                     positions.append(atom.position)
-                    radii.append(atom.vdw_radius)
+                    rad = atom.vdw_radius
+                    #Replace unknown atoms with Carbons
+                    if rad < 0.0001:
+                        rad = 1.7
+                    radii.append(rad)
             if len(positions) != 0:
                 v, n, t = compute_MSMS(positions, radii, self._probe_radius, self._msms_density, self._msms_hdensity)
                 self._add_to_temp_mesh(result, v, n, t)
