@@ -1,10 +1,11 @@
 import nanome
-from nanome.util import Logs
+from nanome.util import Logs, enums
 from nanome.api import shapes
 from nanome.api.shapes import Shape
 import tempfile, sys, subprocess, os
 import numpy as np
 import asyncio
+import randomcolor
 
 class MSMSInstance():
     def __init__(self, plugin, complex):
@@ -32,6 +33,7 @@ class MSMSInstance():
 
         self._alpha = 255
         self._colorv3 = nanome.util.Vector3(255, 255, 255)
+        self._color_scheme = enums.ColorScheme.Monochrome
 
         self._custom_quality = False
 
@@ -61,6 +63,108 @@ class MSMSInstance():
                 await self.finished()
                 self.upload_mesh()
 
+    async def set_color_scheme(self, new_scheme):
+        if self._color_scheme != new_scheme:
+            self._color_scheme = new_scheme
+            await self.finished()
+            if self.nanome_mesh:
+                if self._color_scheme == enums.ColorScheme.Monochrome:
+                    #Just clear current vertex colors
+                    self.nanome_mesh.colors = np.repeat([1.0, 1.0, 1.0, 1.0], len(self.nanome_mesh.vertices) / 3)
+                elif self._color_scheme == enums.ColorScheme.Chain:
+                    self.nanome_mesh.colors = self._color_scheme_chain()
+                elif self._color_scheme == enums.ColorScheme.Element:
+                    self.nanome_mesh.colors = self._color_scheme_element()
+                elif self._color_scheme == enums.ColorScheme.Residue:
+                    self.nanome_mesh.colors = self._color_scheme_residue()
+                elif self._color_scheme == enums.ColorScheme.enums.SecondaryStructure:
+                    self.nanome_mesh.colors = self._color_scheme_ss()
+                else:
+                    Logs.warning("Unsupported color scheme (",self._color_scheme,")")
+                    self.nanome_mesh.colors = np.repeat([1.0, 1.0, 1.0, 1.0], len(self.nanome_mesh.vertices) / 3)
+                    self._color_scheme = enums.ColorScheme.Monochrome
+
+                #Reconstruct color array and darken it with AO values
+                self.nanome_mesh.colors = np.asarray(self.darken_colors())
+                self.upload_mesh()
+                await self.finished()
+        
+    def _color_scheme_chain(self):
+
+        molecule = self._complex._molecules[self._complex.current_frame]
+        n_chain = len(list(molecule.chains))
+
+        rdcolor = randomcolor.RandomColor(seed=1234)
+        chain_cols = rdcolor.generate(format_="rgb", count=n_chain)
+
+        id_chain = 0
+        color_per_atom = []
+        for c in molecule.chains:
+            col = chain_cols[id_chain]
+            col = col.replace("rgb(", "").replace(")","").replace(",","").split()
+            chain_color = [int(i) for i in col] + [255]
+            id_chain+=1
+            for atom in c.atoms:
+                color_per_atom.append(chain_color)
+
+        colors = []
+        for idx in self._temp_mesh["indices"]:
+            colors.append(color_per_atom[idx])
+        return colors
+
+    def _color_scheme_residue(self):
+        molecule = self._complex._molecules[self._complex.current_frame]
+        rdcolor = randomcolor.RandomColor(seed=1234)
+        residue_to_color = {}
+
+        color_per_atom = []
+        for c in molecule.chains:
+            for a in c.atoms:
+                if not a.residue.name in residue_to_color:
+                    col = rdcolor.generate(format_="rgb")
+                    col = col.replace("rgb(", "").replace(")","").replace(",","").split()
+                    r_color = [int(i) for i in col] + [255]
+                    residue_to_color[a.residue.name] = r_color
+                residue_color = residue_to_color[a.residue.name]
+                color_per_atom.append(residue_color)
+        
+        colors = []
+        for idx in self._temp_mesh["indices"]:
+            colors.append(color_per_atom[idx])
+        return colors
+
+    def _color_scheme_element(self):
+        molecule = self._complex._molecules[self._complex.current_frame]
+
+        color_per_atom = [cpk_colors(a) for a in molecule.atoms]
+        
+        colors = []
+        for idx in self._temp_mesh["indices"]:
+            colors.append(color_per_atom[idx])
+        return colors
+    
+    def _color_scheme_ss(self):
+        molecule = self._complex._molecules[self._complex.current_frame]
+
+        unknown_color = [128, 128, 128, 255]
+        coil_color = [20, 255, 20, 255]
+        sheet_color = [240, 240, 0, 255]
+        helix_color = [255, 20, 20, 255]
+
+        ss_colors = [unknown_color, coil_color, sheet_color, helix_color]
+
+        color_per_atom = []
+        for c in molecule.chains:
+            for a in c.atoms:
+                ss = int(a.residue.secondary_structure)
+                a_color = ss_colors[ss]
+                color_per_atom.append(a_color)
+        
+        colors = []
+        for idx in self._temp_mesh["indices"]:
+            colors.append(color_per_atom[idx])
+        return colors
+    
     def done_upload(self, m):
         self._is_busy = False
     
@@ -84,12 +188,24 @@ class MSMSInstance():
                 if new_ao:
                     self._is_busy = True
                     self.compute_AO()
-                    self.nanome_mesh.colors = np.asarray(self._temp_mesh["colors"])
+                    if self._color_scheme == enums.ColorScheme.Monochrome:
+                        #Clear color array
+                        self.nanome_mesh.colors = np.repeat([1.0, 1.0, 1.0, 1.0], len(self._temp_mesh["ao"]))
                 else:
-                    #Just clear current vertex colors
-                    self.nanome_mesh.colors = np.repeat([1.0, 1.0, 1.0, 1.0], len(self.nanome_mesh.vertices) / 3)
+                    #Clear AO array
+                    self._temp_mesh["ao"] = np.repeat([1.0, 1.0, 1.0, 1.0], len(self.nanome_mesh.colors))
+                #Reconstruct color array and darken it with AO values
+                self.nanome_mesh.colors = np.asarray(self.darken_colors())
                 self.upload_mesh()
                 await self.finished()
+
+    def darken_colors(self):
+        cols = []
+        for i in range(len(self._temp_mesh["colors"])):
+            ao = self._temp_mesh["ao"][i][0]
+            r,g,b,a = self._temp_mesh["colors"][i]
+            cols.append([r * ao, g * ao, b * ao, a])
+        return cols
 
     async def set_probe_radius(self, new_radius, recompute=True):
         if self._probe_radius != new_radius:
@@ -162,6 +278,9 @@ class MSMSInstance():
 
         if len(self._temp_mesh["vertices"]) > 0 and self.ao:
             self.compute_AO()
+        else:
+            N_vert = len(self._temp_mesh["vertices"])
+            self._temp_mesh["colors"] = np.repeat([1.0, 1.0, 1.0, 1.0], N_vert)
 
         if len(self._temp_mesh["vertices"]) > 0:
             self._create_nanome_mesh()
@@ -197,6 +316,7 @@ class MSMSInstance():
         result["normals"] = []
         result["triangles"] = []
         result["colors"] = []
+        result["indices"] = []
 
         self.atoms_to_process = self.count_selected_atoms(molecule)
 
@@ -207,6 +327,7 @@ class MSMSInstance():
         if not self._custom_quality:
             self.auto_MSMS_quality(self.atoms_to_process)
 
+        count_atoms = 0
         for chain in molecule.chains:
             positions = []
             radii = []
@@ -219,15 +340,20 @@ class MSMSInstance():
                         rad = 1.7
                     radii.append(rad)
             if len(positions) != 0:
-                v, n, t = compute_MSMS(positions, radii, self._probe_radius, self._msms_density, self._msms_hdensity)
-                self._add_to_temp_mesh(result, v, n, t)
+                v, n, t, i = compute_MSMS(positions, radii, self._probe_radius, self._msms_density, self._msms_hdensity)
+                self._add_to_temp_mesh(result, count_atoms, v, n, t, i)
+            
+            count_atoms += len(positions)
 
         return result
 
-    def _add_to_temp_mesh(self, temp_mesh, v, n, t):
+    def _add_to_temp_mesh(self, temp_mesh, n_atoms, v, n, t, i):
+
         id_v = int(len(temp_mesh["vertices"]) / 3)
         temp_mesh["vertices"] += v
         temp_mesh["normals"] += n
+        for ind in i:
+            temp_mesh["indices"].append(ind + n_atoms)
         for i in t:
             temp_mesh["triangles"].append(i + id_v)
 
@@ -238,6 +364,7 @@ class MSMSInstance():
         result["normals"] = []
         result["triangles"] = []
         result["colors"] = []
+        result["indices"] = []
 
         positions = []
         radii = []
@@ -258,10 +385,11 @@ class MSMSInstance():
         if not self._custom_quality:
             self.auto_MSMS_quality(self.atoms_to_process)
 
-        verts, norms, tri = compute_MSMS(positions, radii, self._probe_radius, self._msms_density, self._msms_hdensity)
+        verts, norms, tri, indices = compute_MSMS(positions, radii, self._probe_radius, self._msms_density, self._msms_hdensity)
         result["vertices"] = verts
         result["normals"] = norms
         result["triangles"] = tri
+        result["indices"] = indices
 
         return result
 
@@ -270,7 +398,7 @@ class MSMSInstance():
         aoExePath = get_AOEmbree_Executable()
         if aoExePath != "":
             cols = run_AOEmbree(aoExePath, self._temp_mesh)
-        self._temp_mesh["colors"] = cols
+        self._temp_mesh["ao"] = cols
     
     def _create_nanome_mesh(self):
         self.nanome_mesh = shapes.Mesh()
@@ -307,7 +435,7 @@ def compute_MSMS(positions, radii, probe_radius, density, hdensity):
         faces = parse_MSMS_Faces(msms_output.name + ".face")
     else:
         Logs.error("Failed to run MSMS")
-    return (verts, norms, faces)
+    return (verts, norms, faces, indices)
 
 def get_MSMS_Executable():
     if sys.platform == "linux" or sys.platform == "linux2":
@@ -387,3 +515,130 @@ def run_AOEmbree(exePath, temp_mesh, AO_steps = 512, AO_max_dist = 50.0):
         Logs.warning("AO computation failed")
         return []
     return vertCol
+
+def cpk_colors(a):
+    colors = {}
+    colors["xx"] = "#030303"
+    colors["h"] = "#FFFFFF"
+    colors["he"] = "#D9FFFF"
+    colors["li"] = "#CC80FF"
+    colors["be"] = "#C2FF00"
+    colors["b"] = "#FFB5B5"
+    colors["c"] = "#909090"
+    colors["n"] = "#3050F8"
+    colors["o"] = "#FF0D0D"
+    colors["f"] = "#B5FFFF"
+    colors["ne"] = "#B3E3F5"
+    colors["na"] = "#AB5CF2"
+    colors["mg"] = "#8AFF00"
+    colors["al"] = "#BFA6A6"
+    colors["si"] = "#F0C8A0"
+    colors["p"] = "#FF8000"
+    colors["s"] = "#FFFF30"
+    colors["cl"] = "#1FF01F"
+    colors["ar"] = "#80D1E3"
+    colors["k"] = "#8F40D4"
+    colors["ca"] = "#3DFF00"
+    colors["sc"] = "#E6E6E6"
+    colors["ti"] = "#BFC2C7"
+    colors["v"] = "#A6A6AB"
+    colors["cr"] = "#8A99C7"
+    colors["mn"] = "#9C7AC7"
+    colors["fe"] = "#E06633"
+    colors["co"] = "#F090A0"
+    colors["ni"] = "#50D050"
+    colors["cu"] = "#C88033"
+    colors["zn"] = "#7D80B0"
+    colors["ga"] = "#C28F8F"
+    colors["ge"] = "#668F8F"
+    colors["as"] = "#BD80E3"
+    colors["se"] = "#FFA100"
+    colors["br"] = "#A62929"
+    colors["kr"] = "#5CB8D1"
+    colors["rb"] = "#702EB0"
+    colors["sr"] = "#00FF00"
+    colors["y"] = "#94FFFF"
+    colors["zr"] = "#94E0E0"
+    colors["nb"] = "#73C2C9"
+    colors["mo"] = "#54B5B5"
+    colors["tc"] = "#3B9E9E"
+    colors["ru"] = "#248F8F"
+    colors["rh"] = "#0A7D8C"
+    colors["pd"] = "#006985"
+    colors["ag"] = "#C0C0C0"
+    colors["cd"] = "#FFD98F"
+    colors["in"] = "#A67573"
+    colors["sn"] = "#668080"
+    colors["sb"] = "#9E63B5"
+    colors["te"] = "#D47A00"
+    colors["i"] = "#940094"
+    colors["xe"] = "#429EB0"
+    colors["cs"] = "#57178F"
+    colors["ba"] = "#00C900"
+    colors["la"] = "#70D4FF"
+    colors["ce"] = "#FFFFC7"
+    colors["pr"] = "#D9FFC7"
+    colors["nd"] = "#C7FFC7"
+    colors["pm"] = "#A3FFC7"
+    colors["sm"] = "#8FFFC7"
+    colors["eu"] = "#61FFC7"
+    colors["gd"] = "#45FFC7"
+    colors["tb"] = "#30FFC7"
+    colors["dy"] = "#1FFFC7"
+    colors["ho"] = "#00FF9C"
+    colors["er"] = "#00E675"
+    colors["tm"] = "#00D452"
+    colors["yb"] = "#00BF38"
+    colors["lu"] = "#00AB24"
+    colors["hf"] = "#4DC2FF"
+    colors["ta"] = "#4DA6FF"
+    colors["w"] = "#2194D6"
+    colors["re"] = "#267DAB"
+    colors["os"] = "#266696"
+    colors["ir"] = "#175487"
+    colors["pt"] = "#D0D0E0"
+    colors["au"] = "#FFD123"
+    colors["hg"] = "#B8B8D0"
+    colors["tl"] = "#A6544D"
+    colors["pb"] = "#575961"
+    colors["bi"] = "#9E4FB5"
+    colors["po"] = "#AB5C00"
+    colors["at"] = "#754F45"
+    colors["rn"] = "#428296"
+    colors["fr"] = "#420066"
+    colors["ra"] = "#007D00"
+    colors["ac"] = "#70ABFA"
+    colors["th"] = "#00BAFF"
+    colors["pa"] = "#00A1FF"
+    colors["u"] = "#008FFF"
+    colors["np"] = "#0080FF"
+    colors["pu"] = "#006BFF"
+    colors["am"] = "#545CF2"
+    colors["cm"] = "#785CE3"
+    colors["bk"] = "#8A4FE3"
+    colors["cf"] = "#A136D4"
+    colors["es"] = "#B31FD4"
+    colors["fm"] = "#B31FBA"
+    colors["md"] = "#B30DA6"
+    colors["no"] = "#BD0D87"
+    colors["lr"] = "#C70066"
+    colors["rf"] = "#CC0059"
+    colors["db"] = "#D1004F"
+    colors["sg"] = "#D90045"
+    colors["bh"] = "#E00038"
+    colors["hs"] = "#E6002E"
+    colors["mt"] = "#EB0026"
+    colors["ds"] = "#ED0023"
+    colors["rg"] = "#F00021"
+    colors["cn"] = "#E5001E"
+    colors["nh"] = "#F4001C"
+    colors["fl"] = "#F70019"
+    colors["mc"] = "#FA0019"
+    colors["lv"] = "#FC0017"
+    colors["ts"] = "#FC0014"
+    colors["og"] = "#FC000F"
+    a_type = a.symbol.lower()
+    if a_type not in colors:
+        return [255, 0, 255, 255]#Pink unknown
+    h = colors[a_type]
+    return list(int(h[i:i+2], 16) for i in (0, 2, 4)) + [255]
