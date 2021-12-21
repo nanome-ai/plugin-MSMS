@@ -200,6 +200,8 @@ class MSMSInstance():
                 await self.finished()
 
     def darken_colors(self):
+        if len(self._temp_mesh["ao"]) < 1:
+            return self._temp_mesh["colors"]
         cols = []
         for i in range(len(self._temp_mesh["colors"])):
             ao = self._temp_mesh["ao"][i][0]
@@ -317,6 +319,7 @@ class MSMSInstance():
         result["triangles"] = []
         result["colors"] = []
         result["indices"] = []
+        result["ao"] = []
 
         self.atoms_to_process = self.count_selected_atoms(molecule)
 
@@ -365,6 +368,7 @@ class MSMSInstance():
         result["triangles"] = []
         result["colors"] = []
         result["indices"] = []
+        result["ao"] = []
 
         positions = []
         radii = []
