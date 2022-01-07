@@ -2,11 +2,20 @@ import nanome
 import asyncio
 from nanome.api import shapes
 from nanome.util import async_callback
+from nanome.api.ui import Dropdown, DropdownItem
 from ._MSMSProcess import MSMSInstance
 from functools import partial
+import os
+
+BASE_PATH = os.path.dirname(os.path.realpath(__file__))
+IMG_CHECKBOX_ON_PATH = os.path.join(BASE_PATH, 'icons', 'CheckBoxChecked.png')
+IMG_CHECKBOX_OFF_PATH = os.path.join(BASE_PATH, 'icons', 'CheckBoxOutline.png')
+IMG_EYE_ON_PATH = os.path.join(BASE_PATH, 'icons', 'EntityEye.png')
+IMG_EYE_OFF_PATH = os.path.join(BASE_PATH, 'icons', 'InvisibleEye.png')
+IMG_COLOR_PATH = os.path.join(BASE_PATH, 'icons', 'ColorMenu.png')
 
 class MSMS(nanome.AsyncPluginInstance):
-
+        
     def start(self):
         self._probe_radius = 1.4
         self._list_complexes_received = False
@@ -15,90 +24,94 @@ class MSMS(nanome.AsyncPluginInstance):
         self.create_menu()
 
     def create_menu(self):
-        self.menu = nanome.ui.Menu()
-        menu = self.menu
-        menu.title = 'MSMS plugin'
-        menu.width = 0.9
-        menu.height = 0.7
+        menu = nanome.ui.Menu.io.from_json(os.path.join(os.path.dirname(__file__), "_NewMSMSMenu.json"))
+        self.menu = menu
+        eye = menu.root.find_node("Eye").get_content()
+        eye.icon.value.set_all(IMG_EYE_ON_PATH)
+        color_btn = menu.root.find_node("Color").get_content()
+        color_btn.icon.value.set_all(IMG_COLOR_PATH)
 
-        ln_lst = menu.root.create_child_node()
-        ln_lst.forward_dist = 0.001
-        self.lst_obj = ln_lst.add_new_list()
-
+        sel_only = self.menu.root.find_node("Selection").get_content()
+        sel_only.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
+        by_chain = self.menu.root.find_node("ByChain").get_content()
+        by_chain.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
+        ao_btn = self.menu.root.find_node("AO").get_content()
+        ao_btn.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
+        
     def show_menu(self):
         self.menu.enabled = True
         self.update_menu(self.menu)
 
     def populate_objs(self):
-        self.lst_obj.items.clear()
+        struct_dropdown = self.menu.root.find_node("structures").get_content()
+
+        struct_names = []
         if self._list_complexes_received:
             for c in self._list_complexes:
-                complex_name = c.name
-                item = nanome.ui.LayoutNode()
-                item.layout_orientation = nanome.ui.LayoutNode.LayoutTypes.horizontal
-                btn_ln = item.create_child_node()
-                btn = btn_ln.add_new_button(complex_name)
-                ln_btn = item.create_child_node()
-                # ln_btn.set_padding(left=0.13)
-                ln_btn.forward_dist = 0.001
-                btn2 = ln_btn.add_new_toggle_switch("AO")
-                btn2.selected = True
-
-                item2 = nanome.ui.LayoutNode()
-                item2.layout_orientation = nanome.ui.LayoutNode.LayoutTypes.horizontal
-
-                #Opacity slider
-                ln_labelsld = item.create_child_node()
-                ln_sld = item.create_child_node()
-                lblsld = ln_labelsld.add_new_label("Opacity")
-                lblsld.text_auto_size = False
-                lblsld.text_size = 0.3
-                lblsld.text_horizontal_align = nanome.util.enums.HorizAlignOptions.Right
-                lblsld.text_vertical_align = nanome.util.enums.VertAlignOptions.Middle
-                sld = ln_sld.add_new_slider(0, 255, 255)
-
-                #Probe radius slider
-                ln_labelsld2 = item2.create_child_node()
-                ln_sld2 = item2.create_child_node()
-                lbl2 = ln_labelsld2.add_new_label("Probe radius")
-                lbl2.text_auto_size = False
-                lbl2.text_size = 0.25
-                lbl2.forward_dist = 0.001
-                sld2 = ln_sld2.add_new_slider(0.8, 2.5, 1.4)
-
-                #Selected atoms only
-                ln_btn3 = item2.create_child_node()
-                btn4 = ln_btn3.add_new_toggle_switch("Selection")
-                btn4.selected = True
-                btn4.text.auto_size = False
-                btn4.text.size = 0.2
-                ln_btn3.forward_dist = 0.001
-
-                #One mesh per chain
-                ln_btn5 = item2.create_child_node()
-                btn5 = ln_btn5.add_new_toggle_switch("By chain")
-                btn5.selected = True
-                btn5.text.auto_size = False
-                btn5.text.size = 0.2
-                ln_btn5.forward_dist = 0.001
-
-                #hdensity slider
-                # ln_sld3 = item.create_child_node()
-                # sld3 = ln_sld3.add_new_slider(0, 20, 10)
-                # sld3.register_released_callback(partial(self.set_msms_quality, c.index))
-
-                btn.register_pressed_callback(partial(self.get_complex_call_msms, c.index, btn2))
-                btn2.register_pressed_callback(partial(self.set_ao, c.index))
-                btn5.register_pressed_callback(partial(self.set_by_chain, c.index))
-                btn4.register_pressed_callback(partial(self.set_selected_only, c.index))
-                sld.register_released_callback(partial(self.set_opacity, c.index))
-                sld2.register_released_callback(partial(self.set_probe_radius, c.index))
-
-                self.lst_obj.items.append(item)
-                self.lst_obj.items.append(item2)
-
+                item = DropdownItem(c.name)
+                item.complex = c
+                struct_names.append(item)
                 c.register_selection_changed_callback(self.selection_changed)
-        self.update_content(self.lst_obj)
+
+        struct_dropdown.items = struct_names
+        struct_dropdown.register_item_clicked_callback(self.structure_clicked)
+        self.update_content(struct_dropdown)
+
+    @async_callback
+    async def structure_clicked(self, dropdown, item):
+        #Update buttons/sliders based on choice
+        complex_id = item.complex.index
+
+        eye = self.menu.root.find_node("Eye").get_content()
+        color_btn = self.menu.root.find_node("Color").get_content()
+        sel_only = self.menu.root.find_node("Selection").get_content()
+        by_chain = self.menu.root.find_node("ByChain").get_content()
+        ao_btn = self.menu.root.find_node("AO").get_content()
+        opacity_slider = self.menu.root.find_node("Opacity").get_content()
+        probe_slider = self.menu.root.find_node("ProbeRadius").get_content()
+
+        eye.unusable = False
+        color_btn.unusable = False
+        sel_only.unusable = False
+        by_chain.unusable = False
+        ao_btn.unusable = False
+        self.update_content(eye)
+        self.update_content(color_btn)
+        self.update_content(sel_only)
+        self.update_content(by_chain)
+        self.update_content(ao_btn)
+
+        # eye.register_pressed_callback(partial(self.get_complex_call_msms, complex_id))
+        ao_btn.register_pressed_callback(partial(self.set_ao, complex_id))
+        sel_only.register_pressed_callback(partial(self.set_selected_only, complex_id))
+        by_chain.register_pressed_callback(partial(self.set_by_chain, complex_id))
+
+        opacity_slider.register_released_callback(partial(self.set_opacity, complex_id))
+        probe_slider.register_released_callback(partial(self.set_probe_radius, complex_id))
+
+        if not complex_id in self._msms_instances:
+            #Compute new mesh
+            await self.get_complex_call_msms(complex_id, ao_btn, None)
+        else:
+            msms = self._msms_instances[complex_id]
+            if msms.selected_only:
+                sel_only.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
+            else:
+                sel_only.icon.value.set_all(IMG_CHECKBOX_OFF_PATH)
+            if msms._by_chain:
+                by_chain.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
+            else:
+                by_chain.icon.value.set_all(IMG_CHECKBOX_OFF_PATH)
+            if msms.ao:
+                ao_btn.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
+            else:
+                ao_btn.icon.value.set_all(IMG_CHECKBOX_OFF_PATH)
+            
+            opacity_slider.current_value = msms._alpha
+            self.update_content(opacity_slider)
+
+            probe_slider.current_value = msms._probe_radius
+            self.update_content(probe_slider)
 
     @async_callback
     async def selection_changed(self, complex):
@@ -170,6 +183,14 @@ class MSMS(nanome.AsyncPluginInstance):
 
     @async_callback
     async def set_ao(self, complex_id, button):
+        button.selected = not button.selected
+
+        if button.selected:
+            button.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
+        else:
+            button.icon.value.set_all(IMG_CHECKBOX_OFF_PATH)
+        self.update_content(button)
+
         if not complex_id in self._msms_instances:
             deep = await self.request_complexes([complex_id])
             msms = MSMSInstance(self, deep[0])
@@ -184,6 +205,16 @@ class MSMS(nanome.AsyncPluginInstance):
 
     @async_callback
     async def set_by_chain(self, complex_id, button):
+
+        button.selected = not button.selected
+
+        if button.selected:
+            button.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
+        else:
+            button.icon.value.set_all(IMG_CHECKBOX_OFF_PATH)
+        self.update_content(button)
+
+
         if not complex_id in self._msms_instances:
             deep = await self.request_complexes([complex_id])
             msms = MSMSInstance(self, deep[0])
@@ -209,6 +240,15 @@ class MSMS(nanome.AsyncPluginInstance):
 
     @async_callback
     async def set_selected_only(self, complex_id, button):
+
+        button.selected = not button.selected
+
+        if button.selected:
+            button.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
+        else:
+            button.icon.value.set_all(IMG_CHECKBOX_OFF_PATH)
+        self.update_content(button)
+
         if not complex_id in self._msms_instances:
             deep = await self.request_complexes([complex_id])
             msms = MSMSInstance(self, deep[0])
@@ -288,7 +328,6 @@ class MSMS(nanome.AsyncPluginInstance):
     @async_callback
     async def on_run(self):
         shallow = await self.request_complex_list()
-        self.lst_obj.items.clear()
         self._list_complexes_received = True
         self._list_complexes = shallow
         self.show_menu()
