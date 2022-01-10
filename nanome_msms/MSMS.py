@@ -88,7 +88,7 @@ class MSMS(nanome.AsyncPluginInstance):
         self.update_content(by_chain)
         self.update_content(ao_btn)
 
-        # eye.register_pressed_callback(partial(self.get_complex_call_msms, complex_id))
+        eye.register_pressed_callback(partial(self.show_hide_surface, ao_btn, complex_id))
         ao_btn.register_pressed_callback(partial(self.set_ao, complex_id))
         sel_only.register_pressed_callback(partial(self.set_selected_only, complex_id))
         by_chain.register_pressed_callback(partial(self.set_by_chain, complex_id))
@@ -142,6 +142,19 @@ class MSMS(nanome.AsyncPluginInstance):
                 await new_task
 
     @async_callback
+    async def show_hide_surface(self, ao_btn, complex_id, button):
+        button.selected = not button.selected
+
+        if button.selected:
+            button.icon.value.set_all(IMG_EYE_OFF_PATH)
+        else:
+            button.icon.value.set_all(IMG_EYE_ON_PATH)
+        
+        self.update_content(button)
+        
+        await self.get_complex_call_msms(complex_id, ao_btn, None)
+
+    @async_callback
     async def get_complex_call_msms(self, complex_id, ao_button, button):
         deep = await self.request_complexes([complex_id])
         n_atoms, selected_atoms = count_selected_atoms(deep[0])
@@ -191,11 +204,8 @@ class MSMS(nanome.AsyncPluginInstance):
             
 
     def set_color_menu(self, complex_id, button):
-        # if self.color_menu:
-        # else:
-        #     #Load color menu
-        #     self.color_menu = nanome.ui.Menu.io.from_json(os.path.join(os.path.dirname(__file__), "_ColorPickerMenu.json"))
-        self.color_menu = nanome.ui.Menu.io.from_json(os.path.join(os.path.dirname(__file__), "_ColorPickerMenu.json"))
+        if not self.color_menu:
+            self.color_menu = nanome.ui.Menu.io.from_json(os.path.join(os.path.dirname(__file__), "_ColorPickerMenu.json"))
         
         back = self.color_menu.root.find_node("BackButton").get_content()
         back.icon.value.set_all(IMG_BACK_PATH)
@@ -221,6 +231,7 @@ class MSMS(nanome.AsyncPluginInstance):
         sld_b.register_released_callback(partial(self.set_current_B, complex_id))
 
         back.register_pressed_callback(self.load_main_menu)
+        self.update_color_pic()
     
         self.update_menu(self.color_menu)
     
@@ -230,24 +241,28 @@ class MSMS(nanome.AsyncPluginInstance):
     @async_callback
     async def set_current_R(self, complex_id, sld):
         self.current_color.r = int(round(sld.current_value, 2))
-        await self.update_color_pic(complex_id)
+        self.update_color_pic()
+        await self.set_color(complex_id)
     @async_callback
     async def set_current_G(self, complex_id, sld):
         self.current_color.g = int(round(sld.current_value, 2))
-        await self.update_color_pic(complex_id)
+        self.update_color_pic()
+        await self.set_color(complex_id)
     @async_callback
     async def set_current_B(self, complex_id, sld):
         self.current_color.b = int(round(sld.current_value, 2))
-        await self.update_color_pic(complex_id)
+        self.update_color_pic()
+        await self.set_color(complex_id)
 
-    async def update_color_pic(self, complex_id):
+    def update_color_pic(self):
         self.color_pic.color = self.current_color
+        self.update_content(self.color_pic)
 
+    async def set_color(self, complex_id):
         if complex_id in self._msms_instances and self._msms_instances[complex_id].nanome_mesh: #already computed
             msms = self._msms_instances[complex_id]
             await msms.set_color(self.current_color)
 
-        self.update_content(self.color_pic)
 
     @async_callback
     async def set_ao(self, complex_id, button):
