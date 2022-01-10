@@ -15,7 +15,7 @@ class MSMSInstance():
         self.nanome_mesh = None
         self.is_shown = False
         #Compute Ambient Occlusion using AOEmbree
-        self.ao = True
+        self.ao = False
         #Only compute for selected atoms
         self.selected_only = True
 
@@ -72,7 +72,7 @@ class MSMSInstance():
             if self.nanome_mesh:
                 if self._color_scheme == enums.ColorScheme.Monochrome:
                     #Just clear current vertex colors
-                    self.nanome_mesh.colors = np.repeat([1.0, 1.0, 1.0, 1.0], len(self.nanome_mesh.vertices) / 3)
+                    self.nanome_mesh.colors = np.repeat(1.0, 4 * len(self.nanome_mesh.vertices) / 3)
                 elif self._color_scheme == enums.ColorScheme.Chain:
                     self.nanome_mesh.colors = self._color_scheme_chain()
                 elif self._color_scheme == enums.ColorScheme.Element:
@@ -83,11 +83,11 @@ class MSMSInstance():
                     self.nanome_mesh.colors = self._color_scheme_ss()
                 else:
                     Logs.warning("Unsupported color scheme (",self._color_scheme,")")
-                    self.nanome_mesh.colors = np.repeat([1.0, 1.0, 1.0, 1.0], len(self.nanome_mesh.vertices) / 3)
+                    self.nanome_mesh.colors = np.repeat(1.0, 4 * len(self.nanome_mesh.vertices) / 3)
                     self._color_scheme = enums.ColorScheme.Monochrome
 
                 #Reconstruct color array and darken it with AO values
-                self.nanome_mesh.colors = np.asarray(self.darken_colors())
+                self.nanome_mesh.colors = np.asarray(self.darken_colors()).flatten()
                 self.upload_mesh()
                 await self.finished()
         
@@ -192,12 +192,12 @@ class MSMSInstance():
                     self.compute_AO()
                     if self._color_scheme == enums.ColorScheme.Monochrome:
                         #Clear color array
-                        self.nanome_mesh.colors = np.repeat([1.0, 1.0, 1.0, 1.0], len(self._temp_mesh["ao"]))
+                        self._temp_mesh["colors"] = np.repeat(1.0, 4 * len(self._temp_mesh["vertices"]) / 3)
                 else:
                     #Clear AO array
-                    self._temp_mesh["ao"] = np.repeat([1.0, 1.0, 1.0, 1.0], len(self.nanome_mesh.colors))
+                    self._temp_mesh["ao"] = np.repeat(1.0, len(self._temp_mesh["vertices"]) / 3)
                 #Reconstruct color array and darken it with AO values
-                self.nanome_mesh.colors = np.asarray(self.darken_colors())
+                self.nanome_mesh.colors = np.asarray(self.darken_colors()).flatten()
                 self.upload_mesh()
                 await self.finished()
 
@@ -205,9 +205,9 @@ class MSMSInstance():
         if len(self._temp_mesh["ao"]) < 1:
             return self._temp_mesh["colors"]
         cols = []
-        for i in range(len(self._temp_mesh["colors"])):
-            ao = self._temp_mesh["ao"][i][0]
-            r,g,b,a = self._temp_mesh["colors"][i]
+        for i in range(int(len(self._temp_mesh["vertices"])/3)):
+            ao = self._temp_mesh["ao"][i]
+            r,g,b,a = self._temp_mesh["colors"][i*4:i*4+4]
             cols.append([r * ao, g * ao, b * ao, a])
         return cols
 
@@ -263,6 +263,7 @@ class MSMSInstance():
                 return
 
     async def compute_mesh(self):
+
         #Wait for previous mesh to be computed if there is any
         await self.finished()
         self.destroy_mesh()
@@ -283,8 +284,8 @@ class MSMSInstance():
         if len(self._temp_mesh["vertices"]) > 0 and self.ao:
             self.compute_AO()
         else:
-            N_vert = len(self._temp_mesh["vertices"])
-            self._temp_mesh["colors"] = np.repeat([1.0, 1.0, 1.0, 1.0], N_vert)
+            N_vert = len(self._temp_mesh["vertices"])/3
+            self._temp_mesh["colors"] = np.repeat(1.0, 4 * N_vert)
 
         if len(self._temp_mesh["vertices"]) > 0:
             self._create_nanome_mesh()
@@ -294,6 +295,11 @@ class MSMSInstance():
             self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "MSMS failed")
             return
         
+        if self._color_scheme == enums.ColorScheme.Monochrome:
+            #Clear color array
+            self._temp_mesh["colors"] = np.repeat(1.0, 4 * len(self._temp_mesh["vertices"]) / 3)
+        self.nanome_mesh.colors = np.asarray(self.darken_colors()).flatten()
+
         self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Receiving mesh (" + str(len(self.nanome_mesh.vertices)/3) + " vertices)")
         self.upload_mesh()
         self.is_shown = True
@@ -412,9 +418,9 @@ class MSMSInstance():
         self.nanome_mesh.normals = np.asarray(self._temp_mesh["normals"]).flatten()
         self.nanome_mesh.triangles = np.asarray(self._temp_mesh["triangles"]).flatten()
         if len(self._temp_mesh["colors"]) == 0:
-            self.nanome_mesh.colors = np.repeat([1.0, 1.0, 1.0, 1.0], len(self.nanome_mesh.vertices) / 3)
+            self.nanome_mesh.colors = np.repeat(1.0,  4 * len(self.nanome_mesh.vertices) / 3)
         else:
-            self.nanome_mesh.colors = np.asarray(self._temp_mesh["colors"])
+            self.nanome_mesh.colors = np.asarray(self._temp_mesh["colors"]).flatten()
         self.nanome_mesh.anchors[0].anchor_type = nanome.util.enums.ShapeAnchorType.Complex
         self.nanome_mesh.anchors[0].position = nanome.util.Vector3(0, 0, 0)
         self.nanome_mesh.anchors[0].target = self._complex.index
@@ -495,7 +501,7 @@ def run_AOEmbree(exePath, temp_mesh, AO_steps = 512, AO_max_dist = 50.0):
     norms = temp_mesh["normals"]
     faces = temp_mesh["triangles"]
 
-    Logs.debug("Run AOEmbree on ", len(verts)/3," vertices")
+    Logs.debug("Run AOEmbree on", int(len(verts)/3),"vertices")
     #Write mesh to OBJ file
     ao_input = tempfile.NamedTemporaryFile(delete=False, suffix='.obj')
     with open(ao_input.name, "w") as f:
@@ -516,7 +522,7 @@ def run_AOEmbree(exePath, temp_mesh, AO_steps = 512, AO_max_dist = 50.0):
     try:
         for i in range(int(len(verts) / 3)):
             ao = float(sAOValues[i])
-            vertCol += [ao, ao, ao, 1.0]
+            vertCol.append(ao)
     except Exception as e:
         Logs.warning("AO computation failed")
         return []
