@@ -72,18 +72,18 @@ class MSMSInstance():
             if self.nanome_mesh:
                 if self._color_scheme == enums.ColorScheme.Monochrome:
                     #Just clear current vertex colors
-                    self.nanome_mesh.colors = np.repeat(1.0, 4 * len(self.nanome_mesh.vertices) / 3)
+                    self._temp_mesh["colors"] = np.repeat(1.0, 4 * len(self.nanome_mesh.vertices) / 3)
                 elif self._color_scheme == enums.ColorScheme.Chain:
-                    self.nanome_mesh.colors = self._color_scheme_chain()
+                    self._temp_mesh["colors"] = self._color_scheme_chain().flatten()
                 elif self._color_scheme == enums.ColorScheme.Element:
-                    self.nanome_mesh.colors = self._color_scheme_element()
+                    self._temp_mesh["colors"] = self._color_scheme_element().flatten()
                 elif self._color_scheme == enums.ColorScheme.Residue:
-                    self.nanome_mesh.colors = self._color_scheme_residue()
-                elif self._color_scheme == enums.ColorScheme.enums.SecondaryStructure:
-                    self.nanome_mesh.colors = self._color_scheme_ss()
+                    self._temp_mesh["colors"] = self._color_scheme_residue().flatten()
+                elif self._color_scheme == enums.ColorScheme.SecondaryStructure:
+                    self._temp_mesh["colors"] = self._color_scheme_ss().flatten()
                 else:
                     Logs.warning("Unsupported color scheme (",self._color_scheme,")")
-                    self.nanome_mesh.colors = np.repeat(1.0, 4 * len(self.nanome_mesh.vertices) / 3)
+                    self._temp_mesh["colors"] = np.repeat(1.0, 4 * len(self.nanome_mesh.vertices) / 3)
                     self._color_scheme = enums.ColorScheme.Monochrome
 
                 #Reconstruct color array and darken it with AO values
@@ -104,7 +104,7 @@ class MSMSInstance():
         for c in molecule.chains:
             col = chain_cols[id_chain]
             col = col.replace("rgb(", "").replace(")","").replace(",","").split()
-            chain_color = [int(i) for i in col] + [255]
+            chain_color = [int(i)/255.0 for i in col] + [1.0]
             id_chain+=1
             for atom in c.atoms:
                 color_per_atom.append(chain_color)
@@ -112,7 +112,7 @@ class MSMSInstance():
         colors = []
         for idx in self._temp_mesh["indices"]:
             colors.append(color_per_atom[idx])
-        return colors
+        return np.array(colors)
 
     def _color_scheme_residue(self):
         molecule = self._complex._molecules[self._complex.current_frame]
@@ -123,9 +123,9 @@ class MSMSInstance():
         for c in molecule.chains:
             for a in c.atoms:
                 if not a.residue.name in residue_to_color:
-                    col = rdcolor.generate(format_="rgb")
+                    col = rdcolor.generate(format_="rgb")[0]
                     col = col.replace("rgb(", "").replace(")","").replace(",","").split()
-                    r_color = [int(i) for i in col] + [255]
+                    r_color = [int(i)/255.0 for i in col] + [1.0]
                     residue_to_color[a.residue.name] = r_color
                 residue_color = residue_to_color[a.residue.name]
                 color_per_atom.append(residue_color)
@@ -133,7 +133,7 @@ class MSMSInstance():
         colors = []
         for idx in self._temp_mesh["indices"]:
             colors.append(color_per_atom[idx])
-        return colors
+        return np.array(colors)
 
     def _color_scheme_element(self):
         molecule = self._complex._molecules[self._complex.current_frame]
@@ -143,15 +143,15 @@ class MSMSInstance():
         colors = []
         for idx in self._temp_mesh["indices"]:
             colors.append(color_per_atom[idx])
-        return colors
+        return np.array(colors)
     
     def _color_scheme_ss(self):
         molecule = self._complex._molecules[self._complex.current_frame]
 
-        unknown_color = [128, 128, 128, 255]
-        coil_color = [20, 255, 20, 255]
-        sheet_color = [240, 240, 0, 255]
-        helix_color = [255, 20, 20, 255]
+        unknown_color = [0.5, 0.5, 0.5, 1.0]
+        coil_color = [0.0784, 1.0, 0.0784, 1.0]
+        sheet_color = [0.941, 0.941, 0, 1.0]
+        helix_color = [1.0, 0.0784, 0.0784, 1.0]
 
         ss_colors = [unknown_color, coil_color, sheet_color, helix_color]
 
@@ -165,7 +165,7 @@ class MSMSInstance():
         colors = []
         for idx in self._temp_mesh["indices"]:
             colors.append(color_per_atom[idx])
-        return colors
+        return np.array(colors)
     
     def done_upload(self, m):
         self._is_busy = False
@@ -651,6 +651,6 @@ def cpk_colors(a):
     colors["og"] = "#FC000F"
     a_type = a.symbol.lower()
     if a_type not in colors:
-        return [255, 0, 255, 255]#Pink unknown
-    h = colors[a_type]
-    return list(int(h[i:i+2], 16) for i in (0, 2, 4)) + [255]
+        return [1.0, 0, 1.0, 1.0]#Pink unknown
+    h = colors[a_type].lstrip('#')
+    return list(int(h[i:i+2], 16) / 255.0 for i in (0, 2, 4)) + [1.0]

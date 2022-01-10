@@ -1,8 +1,7 @@
 import nanome
 import asyncio
-from nanome.api import shapes
-from nanome.util import async_callback, Vector3, Color
-from nanome.api.ui import Dropdown, DropdownItem
+from nanome.util import async_callback, Color, enums
+from nanome.api.ui import DropdownItem
 from ._MSMSProcess import MSMSInstance
 from functools import partial
 import os
@@ -232,22 +231,58 @@ class MSMS(nanome.AsyncPluginInstance):
 
         back.register_pressed_callback(self.load_main_menu)
         self.update_color_pic()
-    
+
+        color_scheme_dropdown = self.color_menu.root.find_node("ColorByDropdown").get_content()
+        color_scheme_dropdown.register_item_clicked_callback(partial(self.set_color_scheme, complex_id))
+
+        for item in color_scheme_dropdown.items:
+            item.selected = False
+
+        msms = self._msms_instances[complex_id]
+        if msms._color_scheme == enums.ColorScheme.Chain:
+            color_scheme_dropdown.items[0].selected = True
+        elif msms._color_scheme == enums.ColorScheme.Residue:
+            color_scheme_dropdown.items[1].selected = True
+        elif msms._color_scheme == enums.ColorScheme.Element:
+            color_scheme_dropdown.items[2].selected = True
+        elif msms._color_scheme == enums.ColorScheme.SecondaryStructure:
+            color_scheme_dropdown.items[3].selected = True
+        else:
+            color_scheme_dropdown.items[0].selected = True
+
         self.update_menu(self.color_menu)
     
     def load_main_menu(self, btn):
         self.update_menu(self.menu)
 
     @async_callback
+    async def set_color_scheme(self, complex_id, dropdown, item):
+        if complex_id in self._msms_instances and self._msms_instances[complex_id].nanome_mesh: #already computed
+            msms = self._msms_instances[complex_id]
+            color_scheme = enums.ColorScheme.Monochrome
+            if item.name == "Chain":
+                color_scheme = enums.ColorScheme.Chain
+            elif item.name == "Residue":
+                color_scheme = enums.ColorScheme.Residue
+            elif item.name == "Element":
+                color_scheme = enums.ColorScheme.Element
+            elif item.name == "SecondaryStructure":
+                color_scheme = enums.ColorScheme.SecondaryStructure
+            await msms.set_color_scheme(color_scheme)
+        
+
+    @async_callback
     async def set_current_R(self, complex_id, sld):
         self.current_color.r = int(round(sld.current_value, 2))
         self.update_color_pic()
         await self.set_color(complex_id)
+    
     @async_callback
     async def set_current_G(self, complex_id, sld):
         self.current_color.g = int(round(sld.current_value, 2))
         self.update_color_pic()
         await self.set_color(complex_id)
+    
     @async_callback
     async def set_current_B(self, complex_id, sld):
         self.current_color.b = int(round(sld.current_value, 2))
