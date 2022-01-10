@@ -1,7 +1,7 @@
 import nanome
 import asyncio
 from nanome.api import shapes
-from nanome.util import async_callback
+from nanome.util import async_callback, Vector3, Color
 from nanome.api.ui import Dropdown, DropdownItem
 from ._MSMSProcess import MSMSInstance
 from functools import partial
@@ -13,6 +13,8 @@ IMG_CHECKBOX_OFF_PATH = os.path.join(BASE_PATH, 'icons', 'CheckBoxOutline.png')
 IMG_EYE_ON_PATH = os.path.join(BASE_PATH, 'icons', 'EntityEye.png')
 IMG_EYE_OFF_PATH = os.path.join(BASE_PATH, 'icons', 'InvisibleEye.png')
 IMG_COLOR_PATH = os.path.join(BASE_PATH, 'icons', 'ColorMenu.png')
+IMG_CIRCLE_PATH = os.path.join(BASE_PATH, 'icons', 'Circle.png')
+IMG_BACK_PATH = os.path.join(BASE_PATH, 'icons', 'BackIcon.png')
 
 class MSMS(nanome.AsyncPluginInstance):
         
@@ -24,6 +26,8 @@ class MSMS(nanome.AsyncPluginInstance):
         self.create_menu()
 
     def create_menu(self):
+        self.color_menu = None
+        self.current_color = Color(255, 255, 255)
         menu = nanome.ui.Menu.io.from_json(os.path.join(os.path.dirname(__file__), "_NewMSMSMenu.json"))
         self.menu = menu
         eye = menu.root.find_node("Eye").get_content()
@@ -70,6 +74,9 @@ class MSMS(nanome.AsyncPluginInstance):
         opacity_slider = self.menu.root.find_node("Opacity").get_content()
         probe_slider = self.menu.root.find_node("ProbeRadius").get_content()
 
+        probe_slider = self.menu.root.find_node("ProbeRadius").get_content()
+
+
         eye.unusable = False
         color_btn.unusable = False
         sel_only.unusable = False
@@ -88,6 +95,8 @@ class MSMS(nanome.AsyncPluginInstance):
 
         opacity_slider.register_released_callback(partial(self.set_opacity, complex_id))
         probe_slider.register_released_callback(partial(self.set_probe_radius, complex_id))
+
+        color_btn.register_pressed_callback(partial(self.set_color_menu, complex_id))
 
         if not complex_id in self._msms_instances:
             #Compute new mesh
@@ -180,6 +189,65 @@ class MSMS(nanome.AsyncPluginInstance):
             self._msms_tasks[complex_id] = new_task
             await new_task
             
+
+    def set_color_menu(self, complex_id, button):
+        # if self.color_menu:
+        # else:
+        #     #Load color menu
+        #     self.color_menu = nanome.ui.Menu.io.from_json(os.path.join(os.path.dirname(__file__), "_ColorPickerMenu.json"))
+        self.color_menu = nanome.ui.Menu.io.from_json(os.path.join(os.path.dirname(__file__), "_ColorPickerMenu.json"))
+        
+        back = self.color_menu.root.find_node("BackButton").get_content()
+        back.icon.value.set_all(IMG_BACK_PATH)
+
+        label = self.color_menu.root.find_node("StructureName").get_content()
+        label.text_value = self._msms_instances[complex_id]._complex.name
+
+        self.color_pic = self.color_menu.root.find_node("ResultColor").get_content()
+        self.color_pic.file_path = IMG_CIRCLE_PATH
+
+        sld_r = self.color_menu.root.find_node("SliderR").get_content()
+        sld_g = self.color_menu.root.find_node("SliderG").get_content()
+        sld_b = self.color_menu.root.find_node("SliderB").get_content()
+        
+        cv3 = self._msms_instances[complex_id]._colorv3
+        self.current_color = Color(cv3.x, cv3.y, cv3.z, 255)
+        sld_r.current_value = cv3.x
+        sld_g.current_value = cv3.y
+        sld_b.current_value = cv3.z
+
+        sld_r.register_released_callback(partial(self.set_current_R, complex_id))
+        sld_g.register_released_callback(partial(self.set_current_G, complex_id))
+        sld_b.register_released_callback(partial(self.set_current_B, complex_id))
+
+        back.register_pressed_callback(self.load_main_menu)
+    
+        self.update_menu(self.color_menu)
+    
+    def load_main_menu(self, btn):
+        self.update_menu(self.menu)
+
+    @async_callback
+    async def set_current_R(self, complex_id, sld):
+        self.current_color.r = int(round(sld.current_value, 2))
+        await self.update_color_pic(complex_id)
+    @async_callback
+    async def set_current_G(self, complex_id, sld):
+        self.current_color.g = int(round(sld.current_value, 2))
+        await self.update_color_pic(complex_id)
+    @async_callback
+    async def set_current_B(self, complex_id, sld):
+        self.current_color.b = int(round(sld.current_value, 2))
+        await self.update_color_pic(complex_id)
+
+    async def update_color_pic(self, complex_id):
+        self.color_pic.color = self.current_color
+
+        if complex_id in self._msms_instances and self._msms_instances[complex_id].nanome_mesh: #already computed
+            msms = self._msms_instances[complex_id]
+            await msms.set_color(self.current_color)
+
+        self.update_content(self.color_pic)
 
     @async_callback
     async def set_ao(self, complex_id, button):

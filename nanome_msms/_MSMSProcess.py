@@ -50,6 +50,8 @@ class MSMSInstance():
             self.upload_mesh()
 
     async def set_color(self, new_color):
+        if type(new_color == nanome.util.Color):
+            new_color = [new_color.r, new_color.g, new_color.b]
         if len(new_color) != 3:
             print("Color has to be an array of 3 int")
             return
