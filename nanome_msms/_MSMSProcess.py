@@ -292,6 +292,7 @@ class MSMSInstance():
         else:
             Logs.error("Failed to compute MSMS")
             self.destroy_mesh()
+            self._is_busy = False
             self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "MSMS failed")
             return
         
