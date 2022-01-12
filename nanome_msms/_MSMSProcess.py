@@ -70,29 +70,31 @@ class MSMSInstance():
             self._color_scheme = new_scheme
             await self.finished()
             if self.nanome_mesh:
-                if self._color_scheme == enums.ColorScheme.Monochrome:
-                    #Just clear current vertex colors
-                    self._temp_mesh["colors"] = np.repeat(1.0, 4 * len(self.nanome_mesh.vertices) / 3)
-                elif self._color_scheme == enums.ColorScheme.Chain:
-                    self._temp_mesh["colors"] = self._color_scheme_chain().flatten()
-                elif self._color_scheme == enums.ColorScheme.Element:
-                    self._temp_mesh["colors"] = self._color_scheme_element().flatten()
-                elif self._color_scheme == enums.ColorScheme.Residue:
-                    self._temp_mesh["colors"] = self._color_scheme_residue().flatten()
-                elif self._color_scheme == enums.ColorScheme.SecondaryStructure:
-                    self._temp_mesh["colors"] = self._color_scheme_ss().flatten()
-                else:
-                    Logs.warning("Unsupported color scheme (",self._color_scheme,")")
-                    self._temp_mesh["colors"] = np.repeat(1.0, 4 * len(self.nanome_mesh.vertices) / 3)
-                    self._color_scheme = enums.ColorScheme.Monochrome
-
-                #Reconstruct color array and darken it with AO values
-                self.nanome_mesh.colors = np.asarray(self.darken_colors()).flatten()
+                self.apply_color_scheme()
                 self.upload_mesh()
                 await self.finished()
         
-    def _color_scheme_chain(self):
+    def apply_color_scheme(self):
+        if self._color_scheme == enums.ColorScheme.Monochrome:
+            #Just clear current vertex colors
+            self._temp_mesh["colors"] = np.repeat(1.0, 4 * len(self.nanome_mesh.vertices) / 3)
+        elif self._color_scheme == enums.ColorScheme.Chain:
+            self._temp_mesh["colors"] = self._color_scheme_chain().flatten()
+        elif self._color_scheme == enums.ColorScheme.Element:
+            self._temp_mesh["colors"] = self._color_scheme_element().flatten()
+        elif self._color_scheme == enums.ColorScheme.Residue:
+            self._temp_mesh["colors"] = self._color_scheme_residue().flatten()
+        elif self._color_scheme == enums.ColorScheme.SecondaryStructure:
+            self._temp_mesh["colors"] = self._color_scheme_ss().flatten()
+        else:
+            Logs.warning("Unsupported color scheme (",self._color_scheme,")")
+            self._temp_mesh["colors"] = np.repeat(1.0, 4 * len(self.nanome_mesh.vertices) / 3)
+            self._color_scheme = enums.ColorScheme.Monochrome
 
+        #Reconstruct color array and darken it with AO values
+        self.nanome_mesh.colors = np.asarray(self.darken_colors()).flatten()
+    
+    def _color_scheme_chain(self):
         molecule = self._complex._molecules[self._complex.current_frame]
         n_chain = len(list(molecule.chains))
 
@@ -296,10 +298,8 @@ class MSMSInstance():
             self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "MSMS failed")
             return
         
-        if self._color_scheme == enums.ColorScheme.Monochrome:
-            #Clear color array
-            self._temp_mesh["colors"] = np.repeat(1.0, 4 * len(self._temp_mesh["vertices"]) / 3)
-        self.nanome_mesh.colors = np.asarray(self.darken_colors()).flatten()
+
+        self.apply_color_scheme()
 
         self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Receiving mesh (" + str(len(self.nanome_mesh.vertices)/3) + " vertices)")
         self.upload_mesh()
