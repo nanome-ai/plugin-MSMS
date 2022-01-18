@@ -15,15 +15,16 @@ IMG_COLOR_PATH = os.path.join(BASE_PATH, 'icons', 'ColorMenu.png')
 IMG_CIRCLE_PATH = os.path.join(BASE_PATH, 'icons', 'Circle.png')
 IMG_BACK_PATH = os.path.join(BASE_PATH, 'icons', 'BackIcon.png')
 
+
 class MSMS(nanome.AsyncPluginInstance):
-        
+
     def start(self):
         self._probe_radius = 1.4
         self._list_complexes_received = False
         self._msms_instances = {}
         self._msms_tasks = {}
         self.create_menu()
-    
+
     @async_callback
     async def on_complex_added(self):
         # Get new complex list
@@ -56,7 +57,7 @@ class MSMS(nanome.AsyncPluginInstance):
         by_chain.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
         ao_btn = self.menu.root.find_node("AO").get_content()
         ao_btn.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
-        
+
     def show_menu(self):
         self.menu.enabled = True
         self.update_menu(self.menu)
@@ -70,7 +71,7 @@ class MSMS(nanome.AsyncPluginInstance):
             for i in struct_dropdown.items:
                 if i.selected:
                     selected_c = i.complex.index
-        
+
         struct_names = []
         if self._list_complexes_received:
             for c in self._list_complexes:
@@ -87,7 +88,7 @@ class MSMS(nanome.AsyncPluginInstance):
 
     @async_callback
     async def structure_clicked(self, dropdown, item):
-        #Update buttons/sliders based on choice
+        # Update buttons/sliders based on choice
         complex_id = item.complex.index
 
         eye = self.menu.root.find_node("Eye").get_content()
@@ -135,7 +136,7 @@ class MSMS(nanome.AsyncPluginInstance):
             self.update_content(by_chain)
             self.update_content(ao_btn)
 
-            #Compute new mesh
+            # Compute new mesh
             await self.get_complex_call_msms(complex_id, ao_btn, None)
         else:
             msms = self._msms_instances[complex_id]
@@ -151,10 +152,10 @@ class MSMS(nanome.AsyncPluginInstance):
                 ao_btn.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
             else:
                 ao_btn.icon.value.set_all(IMG_CHECKBOX_OFF_PATH)
-            
+
             opacity_slider.current_value = msms._alpha
             probe_slider.current_value = msms._probe_radius
-            
+
             self.update_content(opacity_slider)
             self.update_content(probe_slider)
             self.update_content(sel_only)
@@ -170,7 +171,7 @@ class MSMS(nanome.AsyncPluginInstance):
             msms = self._msms_instances[complex_id]
             msms._complex = deep[0]
             t = self._msms_tasks[complex_id]
-            #Mesh needs update => selection changed
+            # Mesh needs update => selection changed
             if msms.selected_only:
                 if not t.done():
                     t.cancel()
@@ -188,9 +189,9 @@ class MSMS(nanome.AsyncPluginInstance):
             button.icon.value.set_all(IMG_EYE_OFF_PATH)
         else:
             button.icon.value.set_all(IMG_EYE_ON_PATH)
-        
+
         self.update_content(button)
-        
+
         await self.get_complex_call_msms(complex_id, ao_btn, None)
 
     @async_callback
@@ -199,7 +200,7 @@ class MSMS(nanome.AsyncPluginInstance):
         n_atoms, selected_atoms = count_selected_atoms(deep[0])
 
         if not complex_id in self._msms_instances:
-            #Compute new mesh
+            # Compute new mesh
             msms = MSMSInstance(self, deep[0])
             t = asyncio.create_task(msms.compute_mesh())
             self._msms_instances[complex_id] = msms
@@ -210,9 +211,9 @@ class MSMS(nanome.AsyncPluginInstance):
             return
 
         msms = self._msms_instances[complex_id]
-        if msms.nanome_mesh: #already computed
+        if msms.nanome_mesh:  # already computed
             t = self._msms_tasks[complex_id]
-            #Mesh needs update => selection changed
+            # Mesh needs update => selection changed
             if msms.selected_only and msms.atoms_to_process != selected_atoms:
                 if not t.done():
                     t.cancel()
@@ -220,7 +221,7 @@ class MSMS(nanome.AsyncPluginInstance):
                 new_task = asyncio.create_task(msms.compute_mesh())
                 self._msms_tasks[complex_id] = new_task
                 await new_task
-            #Mesh needs update => number of atoms changed
+            # Mesh needs update => number of atoms changed
             elif not msms.selected_only and msms.atoms_to_process != n_atoms:
                 if not t.done():
                     t.cancel()
@@ -231,21 +232,20 @@ class MSMS(nanome.AsyncPluginInstance):
             else:
                 #Show or hide
                 await msms.show(not msms.is_shown)
-        else: #Not computed but instance exists
+        else:  # Not computed but instance exists
             t = self._msms_tasks[complex_id]
             if not t.done():
                 t.cancel()
                 await t
-            #Compute new mesh with existing instance
+            # Compute new mesh with existing instance
             new_task = asyncio.create_task(msms.compute_mesh())
             self._msms_tasks[complex_id] = new_task
             await new_task
-            
 
     def set_color_menu(self, complex_id, button):
         if not self.color_menu:
             self.color_menu = nanome.ui.Menu.io.from_json(os.path.join(os.path.dirname(__file__), "_ColorPickerMenu.json"))
-        
+
         back = self.color_menu.root.find_node("BackButton").get_content()
         back.icon.value.set_all(IMG_BACK_PATH)
 
@@ -258,7 +258,7 @@ class MSMS(nanome.AsyncPluginInstance):
         sld_r = self.color_menu.root.find_node("SliderR").get_content()
         sld_g = self.color_menu.root.find_node("SliderG").get_content()
         sld_b = self.color_menu.root.find_node("SliderB").get_content()
-        
+
         cv3 = self._msms_instances[complex_id]._colorv3
         self.current_color = Color(cv3.x, cv3.y, cv3.z, 255)
         sld_r.current_value = cv3.x
@@ -291,13 +291,13 @@ class MSMS(nanome.AsyncPluginInstance):
             color_scheme_dropdown.items[0].selected = True
 
         self.update_menu(self.color_menu)
-    
+
     def load_main_menu(self, btn):
         self.update_menu(self.menu)
 
     @async_callback
     async def set_color_scheme(self, complex_id, dropdown, item):
-        if complex_id in self._msms_instances and self._msms_instances[complex_id].nanome_mesh: #already computed
+        if complex_id in self._msms_instances and self._msms_instances[complex_id].nanome_mesh:  # already computed
             msms = self._msms_instances[complex_id]
             color_scheme = enums.ColorScheme.Monochrome
             if item.name == "Chain":
@@ -309,20 +309,19 @@ class MSMS(nanome.AsyncPluginInstance):
             elif item.name == "SecondaryStructure":
                 color_scheme = enums.ColorScheme.SecondaryStructure
             await msms.set_color_scheme(color_scheme)
-        
 
     @async_callback
     async def set_current_R(self, complex_id, sld):
         self.current_color.r = int(round(sld.current_value, 2))
         self.update_color_pic()
         await self.set_color(complex_id)
-    
+
     @async_callback
     async def set_current_G(self, complex_id, sld):
         self.current_color.g = int(round(sld.current_value, 2))
         self.update_color_pic()
         await self.set_color(complex_id)
-    
+
     @async_callback
     async def set_current_B(self, complex_id, sld):
         self.current_color.b = int(round(sld.current_value, 2))
@@ -334,10 +333,9 @@ class MSMS(nanome.AsyncPluginInstance):
         self.update_content(self.color_pic)
 
     async def set_color(self, complex_id):
-        if complex_id in self._msms_instances and self._msms_instances[complex_id].nanome_mesh: #already computed
+        if complex_id in self._msms_instances and self._msms_instances[complex_id].nanome_mesh:  # already computed
             msms = self._msms_instances[complex_id]
             await msms.set_color(self.current_color)
-
 
     @async_callback
     async def set_ao(self, complex_id, button):
@@ -357,7 +355,7 @@ class MSMS(nanome.AsyncPluginInstance):
             self._msms_tasks[complex_id] = t
             await t
             return
-        
+
         msms = self._msms_instances[complex_id]
         await msms.set_ao(button.selected)
 
@@ -372,7 +370,6 @@ class MSMS(nanome.AsyncPluginInstance):
             button.icon.value.set_all(IMG_CHECKBOX_OFF_PATH)
         self.update_content(button)
 
-
         if not complex_id in self._msms_instances:
             deep = await self.request_complexes([complex_id])
             msms = MSMSInstance(self, deep[0])
@@ -383,7 +380,7 @@ class MSMS(nanome.AsyncPluginInstance):
             return
 
         msms = self._msms_instances[complex_id]
-        if msms.nanome_mesh: #already computed
+        if msms.nanome_mesh:  # already computed
             t = self._msms_tasks[complex_id]
             if not t.done():
                 t.cancel()
@@ -392,9 +389,8 @@ class MSMS(nanome.AsyncPluginInstance):
             self._msms_tasks[complex_id] = t
             await t
 
-        else: #Not computed but instance exists
+        else:  # Not computed but instance exists
             await msms.set_compute_by_chain(button.selected, recompute=False)
-
 
     @async_callback
     async def set_selected_only(self, complex_id, button):
@@ -417,7 +413,7 @@ class MSMS(nanome.AsyncPluginInstance):
             return
 
         msms = self._msms_instances[complex_id]
-        if msms.nanome_mesh: #already computed
+        if msms.nanome_mesh:  # already computed
             t = self._msms_tasks[complex_id]
             if not t.done():
                 t.cancel()
@@ -425,10 +421,9 @@ class MSMS(nanome.AsyncPluginInstance):
             t = asyncio.create_task(msms.set_selected_only(button.selected))
             self._msms_tasks[complex_id] = t
             await t
-        else: #Not computed but instance exists
+        else:  # Not computed but instance exists
             await msms.set_selected_only(button.selected)
 
-        
     @async_callback
     async def set_msms_quality(self, complex_id, slider):
         if not complex_id in self._msms_instances:
@@ -441,7 +436,7 @@ class MSMS(nanome.AsyncPluginInstance):
             return
 
         msms = self._msms_instances[complex_id]
-        if msms.nanome_mesh: #already computed
+        if msms.nanome_mesh:  # already computed
             t = self._msms_tasks[complex_id]
             if not t.done():
                 t.cancel()
@@ -449,9 +444,8 @@ class MSMS(nanome.AsyncPluginInstance):
             t = asyncio.create_task(msms.set_MSMS_quality(slider.current_value, msms._msms_hdensity))
             self._msms_tasks[complex_id] = t
             await t
-        else: #Not computed but instance exists
+        else:  # Not computed but instance exists
             await msms.set_MSMS_quality(slider.current_value, msms._msms_hdensity, recompute=False)
-
 
     @async_callback
     async def set_probe_radius(self, complex_id, slider):
@@ -463,9 +457,9 @@ class MSMS(nanome.AsyncPluginInstance):
             self._msms_tasks[complex_id] = t
             await t
             return
-        
+
         msms = self._msms_instances[complex_id]
-        if msms.nanome_mesh: #already computed
+        if msms.nanome_mesh:  # already computed
             t = self._msms_tasks[complex_id]
             if not t.done():
                 t.cancel()
@@ -473,13 +467,12 @@ class MSMS(nanome.AsyncPluginInstance):
             t = asyncio.create_task(msms.set_probe_radius(round(slider.current_value, 3)))
             self._msms_tasks[complex_id] = t
             await t
-        else: #Not computed but instance exists
+        else:  # Not computed but instance exists
             await msms.set_probe_radius(round(slider.current_value, 3), recompute=False)
-
 
     @async_callback
     async def set_opacity(self, complex_id, slider):
-        if complex_id in self._msms_instances and self._msms_instances[complex_id].nanome_mesh: #already computed
+        if complex_id in self._msms_instances and self._msms_instances[complex_id].nanome_mesh:  # already computed
             msms = self._msms_instances[complex_id]
             await msms.set_alpha(slider.current_value)
 
@@ -498,6 +491,7 @@ class MSMS(nanome.AsyncPluginInstance):
         else:
             self.set_plugin_list_button(nanome.util.enums.PluginListButtonType.run, "Run")
 
+
 def count_selected_atoms(complex):
     molecule = complex._molecules[complex.current_frame]
     count = 0
@@ -508,8 +502,10 @@ def count_selected_atoms(complex):
             count_selected += 1
     return count, count_selected
 
+
 def main():
     nanome.Plugin.setup("MSMS", "Run MSMS and load the molecular surface in Nanome.", "Computation", False, MSMS)
+
 
 if __name__ == "__main__":
     main()

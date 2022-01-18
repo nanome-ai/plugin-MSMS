@@ -2,10 +2,14 @@ import nanome
 from nanome.util import Logs, enums
 from nanome.api import shapes
 from nanome.api.shapes import Shape
-import tempfile, sys, subprocess, os
+import tempfile
+import sys
+import subprocess
+import os
 import numpy as np
 import asyncio
 import randomcolor
+
 
 class MSMSInstance():
     def __init__(self, plugin, complex):
@@ -14,20 +18,20 @@ class MSMSInstance():
 
         self.nanome_mesh = None
         self.is_shown = False
-        #Compute Ambient Occlusion using AOEmbree
+        # Compute Ambient Occlusion using AOEmbree
         self.ao = False
-        #Only compute for selected atoms
+        # Only compute for selected atoms
         self.selected_only = True
 
         self.atoms_to_process = 0
 
-        #Wait to compute a new mesh until mesh is uploaded
+        # Wait to compute a new mesh until mesh is uploaded
         self._is_busy = False
 
-        #Compute a mesh per chain
+        # Compute a mesh per chain
         self._by_chain = True
         self._probe_radius = 1.4
-        #MSMS meshing quality settings
+        # MSMS meshing quality settings
         self._msms_density = 10.0
         self._msms_hdensity = 3
 
@@ -37,7 +41,7 @@ class MSMSInstance():
 
         self._custom_quality = False
 
-    async def show(self, enabled = True):
+    async def show(self, enabled=True):
         if not self.nanome_mesh:
             return
         if self.is_shown != enabled:
@@ -73,10 +77,10 @@ class MSMSInstance():
                 self.apply_color_scheme()
                 self.upload_mesh()
                 await self.finished()
-        
+
     def apply_color_scheme(self):
         if self._color_scheme == enums.ColorScheme.Monochrome:
-            #Just clear current vertex colors
+            # Just clear current vertex colors
             self._temp_mesh["colors"] = np.repeat(1.0, 4 * len(self.nanome_mesh.vertices) / 3)
         elif self._color_scheme == enums.ColorScheme.Chain:
             self._temp_mesh["colors"] = self._color_scheme_chain().flatten()
@@ -87,13 +91,13 @@ class MSMSInstance():
         elif self._color_scheme == enums.ColorScheme.SecondaryStructure:
             self._temp_mesh["colors"] = self._color_scheme_ss().flatten()
         else:
-            Logs.warning("Unsupported color scheme (",self._color_scheme,")")
+            Logs.warning("Unsupported color scheme (", self._color_scheme, ")")
             self._temp_mesh["colors"] = np.repeat(1.0, 4 * len(self.nanome_mesh.vertices) / 3)
             self._color_scheme = enums.ColorScheme.Monochrome
 
-        #Reconstruct color array and darken it with AO values
+        # Reconstruct color array and darken it with AO values
         self.nanome_mesh.colors = np.asarray(self.darken_colors()).flatten()
-    
+
     def _color_scheme_chain(self):
         molecule = self._complex._molecules[self._complex.current_frame]
         n_chain = len(list(molecule.chains))
@@ -105,9 +109,9 @@ class MSMSInstance():
         color_per_atom = []
         for c in molecule.chains:
             col = chain_cols[id_chain]
-            col = col.replace("rgb(", "").replace(")","").replace(",","").split()
-            chain_color = [int(i)/255.0 for i in col] + [1.0]
-            id_chain+=1
+            col = col.replace("rgb(", "").replace(")", "").replace(",", "").split()
+            chain_color = [int(i) / 255.0 for i in col] + [1.0]
+            id_chain += 1
             for atom in c.atoms:
                 color_per_atom.append(chain_color)
 
@@ -126,12 +130,12 @@ class MSMSInstance():
             for a in c.atoms:
                 if not a.residue.name in residue_to_color:
                     col = rdcolor.generate(format_="rgb")[0]
-                    col = col.replace("rgb(", "").replace(")","").replace(",","").split()
-                    r_color = [int(i)/255.0 for i in col] + [1.0]
+                    col = col.replace("rgb(", "").replace(")", "").replace(",", "").split()
+                    r_color = [int(i) / 255.0 for i in col] + [1.0]
                     residue_to_color[a.residue.name] = r_color
                 residue_color = residue_to_color[a.residue.name]
                 color_per_atom.append(residue_color)
-        
+
         colors = []
         for idx in self._temp_mesh["indices"]:
             colors.append(color_per_atom[idx])
@@ -141,12 +145,12 @@ class MSMSInstance():
         molecule = self._complex._molecules[self._complex.current_frame]
 
         color_per_atom = [cpk_colors(a) for a in molecule.atoms]
-        
+
         colors = []
         for idx in self._temp_mesh["indices"]:
             colors.append(color_per_atom[idx])
         return np.array(colors)
-    
+
     def _color_scheme_ss(self):
         molecule = self._complex._molecules[self._complex.current_frame]
 
@@ -163,19 +167,19 @@ class MSMSInstance():
                 ss = int(a.residue.secondary_structure)
                 a_color = ss_colors[ss]
                 color_per_atom.append(a_color)
-        
+
         colors = []
         for idx in self._temp_mesh["indices"]:
             colors.append(color_per_atom[idx])
         return np.array(colors)
-    
+
     def done_upload(self, m):
         self._is_busy = False
-    
+
     def done_destroy(self, m):
         self._is_busy = False
         self.nanome_mesh = None
-    
+
     def upload_mesh(self):
         self.nanome_mesh.upload(self.done_upload)
 
@@ -193,12 +197,12 @@ class MSMSInstance():
                     self._is_busy = True
                     self.compute_AO()
                     if self._color_scheme == enums.ColorScheme.Monochrome:
-                        #Clear color array
+                        # Clear color array
                         self._temp_mesh["colors"] = np.repeat(1.0, 4 * len(self._temp_mesh["vertices"]) / 3)
                 else:
-                    #Clear AO array
+                    # Clear AO array
                     self._temp_mesh["ao"] = np.repeat(1.0, len(self._temp_mesh["vertices"]) / 3)
-                #Reconstruct color array and darken it with AO values
+                # Reconstruct color array and darken it with AO values
                 self.nanome_mesh.colors = np.asarray(self.darken_colors()).flatten()
                 self.upload_mesh()
                 await self.finished()
@@ -207,9 +211,9 @@ class MSMSInstance():
         if len(self._temp_mesh["ao"]) < 1:
             return self._temp_mesh["colors"]
         cols = []
-        for i in range(int(len(self._temp_mesh["vertices"])/3)):
+        for i in range(int(len(self._temp_mesh["vertices"]) / 3)):
             ao = self._temp_mesh["ao"][i]
-            r,g,b,a = self._temp_mesh["colors"][i*4:i*4+4]
+            r, g, b, a = self._temp_mesh["colors"][i * 4:i * 4 + 4]
             cols.append([r * ao, g * ao, b * ao, a])
         return cols
 
@@ -218,7 +222,7 @@ class MSMSInstance():
             self._probe_radius = new_radius
             if recompute:
                 await self.compute_mesh()
-    
+
     async def set_alpha(self, new_alpha):
         if self._alpha != new_alpha:
             self._alpha = new_alpha
@@ -237,7 +241,7 @@ class MSMSInstance():
             self._by_chain = new_by_chain
             if recompute:
                 await self.compute_mesh()
-    
+
     async def set_selected_only(self, new_selected_only, recompute=True):
         if self.selected_only != new_selected_only:
             self.selected_only = new_selected_only
@@ -255,7 +259,7 @@ class MSMSInstance():
     async def finished(self):
         if not self._is_busy:
             return
-        max_time = 60.0 * 5 #5 min
+        max_time = 60.0 * 5  # 5 min
         count_time = 0.0
         step = 0.1
         while self._is_busy:
@@ -266,10 +270,10 @@ class MSMSInstance():
 
     async def compute_mesh(self):
 
-        #Wait for previous mesh to be computed if there is any
+        # Wait for previous mesh to be computed if there is any
         await self.finished()
         self.destroy_mesh()
-        #Wait for the mesh to be destroyed
+        # Wait for the mesh to be destroyed
         await self.finished()
 
         self._is_busy = True
@@ -286,7 +290,7 @@ class MSMSInstance():
         if len(self._temp_mesh["vertices"]) > 0 and self.ao:
             self.compute_AO()
         else:
-            N_vert = len(self._temp_mesh["vertices"])/3
+            N_vert = len(self._temp_mesh["vertices"]) / 3
             self._temp_mesh["colors"] = np.repeat(1.0, 4 * N_vert)
 
         if len(self._temp_mesh["vertices"]) > 0:
@@ -297,11 +301,10 @@ class MSMSInstance():
             self._is_busy = False
             self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "MSMS failed")
             return
-        
 
         self.apply_color_scheme()
 
-        self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Receiving mesh (" + str(len(self.nanome_mesh.vertices)/3) + " vertices)")
+        self.__plugin.send_notification(nanome.util.enums.NotificationTypes.message, "Receiving mesh (" + str(len(self.nanome_mesh.vertices) / 3) + " vertices)")
         self.upload_mesh()
         self.is_shown = True
         await self.finished()
@@ -317,7 +320,7 @@ class MSMSInstance():
         for chain in mol.chains:
             for atom in chain.atoms:
                 if not self.selected_only or atom.selected:
-                    count_atoms+=1
+                    count_atoms += 1
         return count_atoms
 
     def _compute_mesh_by_chain(self, molecule):
@@ -347,14 +350,14 @@ class MSMSInstance():
                 if not self.selected_only or atom.selected:
                     positions.append(atom.position)
                     rad = atom.vdw_radius
-                    #Replace unknown atoms with Carbons
+                    # Replace unknown atoms with Carbons
                     if rad < 0.0001:
                         rad = 1.7
                     radii.append(rad)
             if len(positions) != 0:
                 v, n, t, i = compute_MSMS(positions, radii, self._probe_radius, self._msms_density, self._msms_hdensity)
                 self._add_to_temp_mesh(result, count_atoms, v, n, t, i)
-            
+
             count_atoms += len(positions)
 
         return result
@@ -387,7 +390,7 @@ class MSMSInstance():
             if not self.selected_only or atom.selected:
                 positions.append(atom.position)
                 radii.append(atom.vdw_radius)
-                count_atoms+=1
+                count_atoms += 1
 
         self.atoms_to_process = count_atoms
 
@@ -412,14 +415,14 @@ class MSMSInstance():
         if aoExePath != "":
             cols = run_AOEmbree(aoExePath, self._temp_mesh)
         self._temp_mesh["ao"] = cols
-    
+
     def _create_nanome_mesh(self):
         self.nanome_mesh = shapes.Mesh()
         self.nanome_mesh.vertices = np.asarray(self._temp_mesh["vertices"]).flatten()
         self.nanome_mesh.normals = np.asarray(self._temp_mesh["normals"]).flatten()
         self.nanome_mesh.triangles = np.asarray(self._temp_mesh["triangles"]).flatten()
         if len(self._temp_mesh["colors"]) == 0:
-            self.nanome_mesh.colors = np.repeat(1.0,  4 * len(self.nanome_mesh.vertices) / 3)
+            self.nanome_mesh.colors = np.repeat(1.0, 4 * len(self.nanome_mesh.vertices) / 3)
         else:
             self.nanome_mesh.colors = np.asarray(self._temp_mesh["colors"]).flatten()
         self.nanome_mesh.anchors[0].anchor_type = nanome.util.enums.ShapeAnchorType.Complex
@@ -427,7 +430,8 @@ class MSMSInstance():
         self.nanome_mesh.anchors[0].target = self._complex.index
         self.nanome_mesh.color = nanome.util.Color(self._colorv3.x, self._colorv3.y, self._colorv3.z, self._alpha)
         self.nanome_mesh.uv = np.repeat([0.0, 0.0], len(self.nanome_mesh.vertices) / 3)
-    
+
+
 def compute_MSMS(positions, radii, probe_radius, density, hdensity):
     verts = []
     norms = []
@@ -441,14 +445,15 @@ def compute_MSMS(positions, radii, probe_radius, density, hdensity):
     exePath = get_MSMS_Executable()
 
     subprocess.run(stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        args=[exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", str(probe_radius), "-density", str(density), "-hdensity", str(hdensity), "-no_area", "-no_rest", "-no_header"])
+                   stderr=subprocess.DEVNULL,
+                   args=[exePath, "-if ", msms_input.name, "-of ", msms_output.name, "-probe_radius", str(probe_radius), "-density", str(density), "-hdensity", str(hdensity), "-no_area", "-no_rest", "-no_header"])
     if os.path.isfile(msms_output.name + ".vert") and os.path.isfile(msms_output.name + ".face"):
         verts, norms, indices = parse_MSMS_verts_norms(msms_output.name + ".vert")
         faces = parse_MSMS_Faces(msms_output.name + ".face")
     else:
         Logs.error("Failed to run MSMS")
     return (verts, norms, faces, indices)
+
 
 def get_MSMS_Executable():
     if sys.platform == "linux" or sys.platform == "linux2":
@@ -458,12 +463,14 @@ def get_MSMS_Executable():
     elif sys.platform == "win32":
         return "nanome_msms/MSMS_binaries/Windows/msms.exe"
 
+
 def get_AOEmbree_Executable():
     if sys.platform == "win32":
         return "nanome_msms/AO_binaries/Windows/AOEmbree.exe"
     elif sys.platform == "linux" or sys.platform == "linux2":
         return "nanome_msms/AO_binaries/Linux64/AOEmbree"
     return ""
+
 
 def parse_MSMS_verts_norms(path):
     verts = []
@@ -483,6 +490,7 @@ def parse_MSMS_verts_norms(path):
             indices.append(idx)
     return (verts, norms, indices)
 
+
 def parse_MSMS_Faces(path):
     tris = []
     with open(path) as f:
@@ -497,13 +505,13 @@ def parse_MSMS_Faces(path):
     return tris
 
 
-def run_AOEmbree(exePath, temp_mesh, AO_steps = 512, AO_max_dist = 50.0):
+def run_AOEmbree(exePath, temp_mesh, AO_steps=512, AO_max_dist=50.0):
     verts = temp_mesh["vertices"]
     norms = temp_mesh["normals"]
     faces = temp_mesh["triangles"]
 
-    Logs.debug("Run AOEmbree on", int(len(verts)/3),"vertices")
-    #Write mesh to OBJ file
+    Logs.debug("Run AOEmbree on", int(len(verts) / 3), "vertices")
+    # Write mesh to OBJ file
     ao_input = tempfile.NamedTemporaryFile(delete=False, suffix='.obj')
     with open(ao_input.name, "w") as f:
         for v in range(int(len(verts) / 3)):
@@ -516,7 +524,7 @@ def run_AOEmbree(exePath, temp_mesh, AO_steps = 512, AO_max_dist = 50.0):
     if sys.platform == "linux" or sys.platform == "linux2":
         envi['LD_LIBRARY_PATH'] = os.path.dirname(os.path.abspath(exePath))
 
-    #Run AOEmbree
+    # Run AOEmbree
     AOvalues = subprocess.run(env=envi, args=[os.path.abspath(exePath), "-n", "-i", ao_input.name, "-a", "-s", str(AO_steps), "-d", str(AO_max_dist)], capture_output=True, text=True)
     vertCol = []
     sAOValues = AOvalues.stdout.split()
@@ -528,6 +536,7 @@ def run_AOEmbree(exePath, temp_mesh, AO_steps = 512, AO_max_dist = 50.0):
         Logs.warning("AO computation failed")
         return []
     return vertCol
+
 
 def cpk_colors(a):
     colors = {}
@@ -652,6 +661,6 @@ def cpk_colors(a):
     colors["og"] = "#FC000F"
     a_type = a.symbol.lower()
     if a_type not in colors:
-        return [1.0, 0, 1.0, 1.0]#Pink unknown
+        return [1.0, 0, 1.0, 1.0]  # Pink unknown
     h = colors[a_type].lstrip('#')
-    return list(int(h[i:i+2], 16) / 255.0 for i in (0, 2, 4)) + [1.0]
+    return list(int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4)) + [1.0]
