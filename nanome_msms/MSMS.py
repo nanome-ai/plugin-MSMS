@@ -74,7 +74,7 @@ class MSMS(nanome.AsyncPluginInstance):
         struct_names = []
         if self._list_complexes_received:
             for c in self._list_complexes:
-                item = DropdownItem(c.name)
+                item = DropdownItem(c.full_name)
                 item.complex = c
                 if selected_c and c.index == selected_c:
                     item.selected = True
@@ -98,9 +98,6 @@ class MSMS(nanome.AsyncPluginInstance):
         opacity_slider = self.menu.root.find_node("Opacity").get_content()
         probe_slider = self.menu.root.find_node("ProbeRadius").get_content()
 
-        probe_slider = self.menu.root.find_node("ProbeRadius").get_content()
-
-
         eye.unusable = False
         color_btn.unusable = False
         sel_only.unusable = False
@@ -123,6 +120,21 @@ class MSMS(nanome.AsyncPluginInstance):
         color_btn.register_pressed_callback(partial(self.set_color_menu, complex_id))
 
         if not complex_id in self._msms_instances:
+            sel_only.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
+            sel_only.selected = True
+            by_chain.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
+            by_chain.selected = True
+            ao_btn.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
+            ao_btn.selected = True
+            opacity_slider.current_value = 255
+            probe_slider.current_value = 1.4
+
+            self.update_content(opacity_slider)
+            self.update_content(probe_slider)
+            self.update_content(sel_only)
+            self.update_content(by_chain)
+            self.update_content(ao_btn)
+
             #Compute new mesh
             await self.get_complex_call_msms(complex_id, ao_btn, None)
         else:
@@ -141,10 +153,13 @@ class MSMS(nanome.AsyncPluginInstance):
                 ao_btn.icon.value.set_all(IMG_CHECKBOX_OFF_PATH)
             
             opacity_slider.current_value = msms._alpha
-            self.update_content(opacity_slider)
-
             probe_slider.current_value = msms._probe_radius
+            
+            self.update_content(opacity_slider)
             self.update_content(probe_slider)
+            self.update_content(sel_only)
+            self.update_content(by_chain)
+            self.update_content(ao_btn)
 
     @async_callback
     async def selection_changed(self, complex):
@@ -235,7 +250,7 @@ class MSMS(nanome.AsyncPluginInstance):
         back.icon.value.set_all(IMG_BACK_PATH)
 
         label = self.color_menu.root.find_node("StructureName").get_content()
-        label.text_value = self._msms_instances[complex_id]._complex.name
+        label.text_value = self._msms_instances[complex_id]._complex.full_name
 
         self.color_pic = self.color_menu.root.find_node("ResultColor").get_content()
         self.color_pic.file_path = IMG_CIRCLE_PATH
@@ -411,7 +426,7 @@ class MSMS(nanome.AsyncPluginInstance):
             self._msms_tasks[complex_id] = t
             await t
         else: #Not computed but instance exists
-            await msms.set_selected_only(button.selected, recompute=False)
+            await msms.set_selected_only(button.selected)
 
         
     @async_callback
