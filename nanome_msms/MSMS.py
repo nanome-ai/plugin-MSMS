@@ -23,6 +23,22 @@ class MSMS(nanome.AsyncPluginInstance):
         self._msms_instances = {}
         self._msms_tasks = {}
         self.create_menu()
+    
+    @async_callback
+    async def on_complex_added(self):
+        # Get new complex list
+        shallow = await self.request_complex_list()
+        self._list_complexes_received = True
+        self._list_complexes = shallow
+        self.populate_objs()
+
+    @async_callback
+    async def on_complex_removed(self):
+        # Get new complex list
+        shallow = await self.request_complex_list()
+        self._list_complexes_received = True
+        self._list_complexes = shallow
+        self.populate_objs()
 
     def create_menu(self):
         self.color_menu = None
@@ -48,11 +64,20 @@ class MSMS(nanome.AsyncPluginInstance):
     def populate_objs(self):
         struct_dropdown = self.menu.root.find_node("structures").get_content()
 
+        selected_c = None
+        # Remember selected item
+        if len(struct_dropdown.items) > 0:
+            for i in struct_dropdown.items:
+                if i.selected:
+                    selected_c = i.complex.index
+        
         struct_names = []
         if self._list_complexes_received:
             for c in self._list_complexes:
                 item = DropdownItem(c.name)
                 item.complex = c
+                if selected_c and c.index == selected_c:
+                    item.selected = True
                 struct_names.append(item)
                 c.register_selection_changed_callback(self.selection_changed)
 
