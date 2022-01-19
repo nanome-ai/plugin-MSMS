@@ -12,6 +12,7 @@ Optionally, this plugin computes Ambient Occlusion (AO) to darken buried parts o
 ## Dependencies
 
 [Docker](https://docs.docker.com/get-docker/)
+[Git LFS](https://git-lfs.github.com/)
 
 ## Usage
 
@@ -24,6 +25,12 @@ $ ./deploy.sh -a <plugin_server_address> [optional args]
 ```
 
 ## Development
+
+After cloning, make sure LFS files are checked out.
+```sh
+git lfs fetch
+git lfs checkout
+```
 
 To run the MSMS plugin with autoreload:
 
