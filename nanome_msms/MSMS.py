@@ -2,7 +2,7 @@ import nanome
 import asyncio
 from nanome.util import async_callback, Color, enums
 from nanome.api.ui import DropdownItem
-from ._MSMSProcess import MSMSInstance
+from ._MSMSInstance import MSMSInstance
 from functools import partial
 import os
 
@@ -71,6 +71,7 @@ class MSMS(nanome.AsyncPluginInstance):
             for i in struct_dropdown.items:
                 if i.selected:
                     selected_c = i.complex.index
+                    break
 
         struct_names = []
         if self._list_complexes_received:
