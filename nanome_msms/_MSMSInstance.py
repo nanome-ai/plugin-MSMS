@@ -436,6 +436,7 @@ def compute_MSMS(positions, radii, probe_radius, density, hdensity):
     verts = []
     norms = []
     faces = []
+    indices = []
 
     msms_input = tempfile.NamedTemporaryFile(delete=False, suffix='.xyzr')
     msms_output = tempfile.NamedTemporaryFile(delete=False, suffix='.out')
