@@ -1,10 +1,13 @@
-import nanome
 import asyncio
-from nanome.util import async_callback, Color, enums
-from nanome.api.ui import DropdownItem
-from ._MSMSInstance import MSMSInstance
-from functools import partial
 import os
+from functools import partial
+
+import nanome
+from nanome.api.ui import DropdownItem
+from nanome.util import Color, async_callback, enums
+from packaging import version
+
+from ._MSMSInstance import MSMSInstance
 
 BASE_PATH = os.path.dirname(os.path.realpath(__file__))
 IMG_CHECKBOX_ON_PATH = os.path.join(BASE_PATH, 'icons', 'CheckBoxChecked.png')
@@ -24,6 +27,7 @@ class MSMS(nanome.AsyncPluginInstance):
         self._msms_instances = {}
         self._msms_tasks = {}
         self.create_menu()
+        self._nanome_version = version.parse(nanome.__version__)
 
     @async_callback
     async def on_complex_added(self):
@@ -57,6 +61,8 @@ class MSMS(nanome.AsyncPluginInstance):
         by_chain.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
         ao_btn = self.menu.root.find_node("AO").get_content()
         ao_btn.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
+        unlit_btn = self.menu.root.find_node("Unlit").get_content()
+        unlit_btn.icon.value.set_all(IMG_CHECKBOX_OFF_PATH)
 
     def show_menu(self):
         self.menu.enabled = True
@@ -99,17 +105,20 @@ class MSMS(nanome.AsyncPluginInstance):
         ao_btn = self.menu.root.find_node("AO").get_content()
         opacity_slider = self.menu.root.find_node("Opacity").get_content()
         probe_slider = self.menu.root.find_node("ProbeRadius").get_content()
+        unlit_btn = self.menu.root.find_node("Unlit").get_content()
 
         eye.unusable = False
         color_btn.unusable = False
         sel_only.unusable = False
         by_chain.unusable = False
         ao_btn.unusable = False
+        unlit_btn.unusable = self._nanome_version < version.parse("0.35.5")
         self.update_content(eye)
         self.update_content(color_btn)
         self.update_content(sel_only)
         self.update_content(by_chain)
         self.update_content(ao_btn)
+        self.update_content(unlit_btn)
 
         eye.register_pressed_callback(partial(self.show_hide_surface, ao_btn, complex_id))
         ao_btn.register_pressed_callback(partial(self.set_ao, complex_id))
@@ -120,6 +129,7 @@ class MSMS(nanome.AsyncPluginInstance):
         probe_slider.register_released_callback(partial(self.set_probe_radius, complex_id))
 
         color_btn.register_pressed_callback(partial(self.set_color_menu, complex_id))
+        unlit_btn.register_pressed_callback(partial(self.set_unlit, complex_id))
 
         if not complex_id in self._msms_instances:
             sel_only.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
@@ -128,6 +138,8 @@ class MSMS(nanome.AsyncPluginInstance):
             by_chain.selected = True
             ao_btn.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
             ao_btn.selected = True
+            unlit_btn.selected = False
+            unlit_btn.icon.value.set_all(IMG_CHECKBOX_OFF_PATH)
             opacity_slider.current_value = 255
             probe_slider.current_value = 1.4
 
@@ -476,6 +488,20 @@ class MSMS(nanome.AsyncPluginInstance):
         if complex_id in self._msms_instances and self._msms_instances[complex_id].nanome_mesh:  # already computed
             msms = self._msms_instances[complex_id]
             await msms.set_alpha(slider.current_value)
+
+    @async_callback
+    async def set_unlit(self, complex_id, button):
+        button.selected = not button.selected
+
+        if button.selected:
+            button.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
+        else:
+            button.icon.value.set_all(IMG_CHECKBOX_OFF_PATH)
+        self.update_content(button)
+
+        if complex_id in self._msms_instances and self._msms_instances[complex_id].nanome_mesh:  # already computed
+            msms = self._msms_instances[complex_id]
+            await msms.set_unlit(button.selected)
 
     @async_callback
     async def on_run(self):
