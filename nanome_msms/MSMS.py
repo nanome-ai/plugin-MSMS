@@ -366,7 +366,7 @@ class MSMS(nanome.AsyncPluginInstance):
         self.update_content(button)
 
         unlit_btn = self.menu.root.find_node("Unlit").get_content()
-        unlit_btn.unusable = self._nanome_version < version.parse("0.35.5") or button.selected 
+        unlit_btn.unusable = self._nanome_version < version.parse("0.35.5") or button.selected
         self.update_content(unlit_btn)
 
         if not complex_id in self._msms_instances:
