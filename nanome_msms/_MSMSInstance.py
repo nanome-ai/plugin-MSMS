@@ -257,7 +257,7 @@ class MSMSInstance():
             self._custom_quality = True
             if recompute:
                 await self.compute_mesh()
-    
+
     async def set_unlit(self, unlit):
         if self._unlit != unlit:
             self._unlit = unlit
@@ -268,7 +268,7 @@ class MSMSInstance():
                     self.nanome_mesh.unlit = self._unlit
                     self.upload_mesh()
                     await self.finished()
-    
+
     async def finished(self):
         if not self._is_busy:
             return
