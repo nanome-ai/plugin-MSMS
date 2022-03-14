@@ -148,6 +148,7 @@ class MSMS(nanome.AsyncPluginInstance):
             self.update_content(sel_only)
             self.update_content(by_chain)
             self.update_content(ao_btn)
+            self.update_content(unlit_btn)
 
             # Compute new mesh
             await self.get_complex_call_msms(complex_id, ao_btn, None)
@@ -165,6 +166,10 @@ class MSMS(nanome.AsyncPluginInstance):
                 ao_btn.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
             else:
                 ao_btn.icon.value.set_all(IMG_CHECKBOX_OFF_PATH)
+            if msms._unlit:
+                unlit_btn.icon.value.set_all(IMG_CHECKBOX_ON_PATH)
+            else:
+                unlit_btn.icon.value.set_all(IMG_CHECKBOX_OFF_PATH)
 
             opacity_slider.current_value = msms._alpha
             probe_slider.current_value = msms._probe_radius
@@ -174,6 +179,7 @@ class MSMS(nanome.AsyncPluginInstance):
             self.update_content(sel_only)
             self.update_content(by_chain)
             self.update_content(ao_btn)
+            self.update_content(unlit_btn)
 
     @async_callback
     async def selection_changed(self, complex):
