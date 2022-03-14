@@ -112,7 +112,7 @@ class MSMS(nanome.AsyncPluginInstance):
         sel_only.unusable = False
         by_chain.unusable = False
         ao_btn.unusable = False
-        unlit_btn.unusable = self._nanome_version < version.parse("0.35.5")
+        unlit_btn.unusable = self._nanome_version < version.parse("0.35.5") or ao_btn.selected
         self.update_content(eye)
         self.update_content(color_btn)
         self.update_content(sel_only)
@@ -221,12 +221,11 @@ class MSMS(nanome.AsyncPluginInstance):
         if not complex_id in self._msms_instances:
             # Compute new mesh
             msms = MSMSInstance(self, deep[0])
+            msms.ao = ao_button.selected
             t = asyncio.create_task(msms.compute_mesh())
             self._msms_instances[complex_id] = msms
             self._msms_tasks[complex_id] = t
             await t
-            if ao_button.selected:
-                await msms.set_ao(True)
             return
 
         msms = self._msms_instances[complex_id]
@@ -365,6 +364,10 @@ class MSMS(nanome.AsyncPluginInstance):
         else:
             button.icon.value.set_all(IMG_CHECKBOX_OFF_PATH)
         self.update_content(button)
+
+        unlit_btn = self.menu.root.find_node("Unlit").get_content()
+        unlit_btn.unusable = self._nanome_version < version.parse("0.35.5") or button.selected 
+        self.update_content(unlit_btn)
 
         if not complex_id in self._msms_instances:
             deep = await self.request_complexes([complex_id])
