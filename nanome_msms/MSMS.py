@@ -110,7 +110,7 @@ class MSMS(nanome.AsyncPluginInstance):
         sel_only.unusable = False
         by_chain.unusable = False
         ao_btn.unusable = False
-        unlit_btn.unusable = ao_btn.selected
+        unlit_btn.unusable = not ao_btn.selected
         self.update_content(eye)
         self.update_content(color_btn)
         self.update_content(sel_only)
@@ -364,7 +364,7 @@ class MSMS(nanome.AsyncPluginInstance):
         self.update_content(button)
 
         unlit_btn = self.menu.root.find_node("Unlit").get_content()
-        unlit_btn.unusable = button.selected
+        unlit_btn.unusable = not button.selected
         self.update_content(unlit_btn)
 
         if not complex_id in self._msms_instances:
