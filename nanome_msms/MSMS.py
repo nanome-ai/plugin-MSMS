@@ -5,7 +5,6 @@ from functools import partial
 import nanome
 from nanome.api.ui import DropdownItem
 from nanome.util import Color, async_callback, enums
-from packaging import version
 
 from ._MSMSInstance import MSMSInstance
 
@@ -27,7 +26,6 @@ class MSMS(nanome.AsyncPluginInstance):
         self._msms_instances = {}
         self._msms_tasks = {}
         self.create_menu()
-        self._nanome_version = version.parse(nanome.__version__)
 
     @async_callback
     async def on_complex_added(self):
@@ -112,7 +110,7 @@ class MSMS(nanome.AsyncPluginInstance):
         sel_only.unusable = False
         by_chain.unusable = False
         ao_btn.unusable = False
-        unlit_btn.unusable = self._nanome_version < version.parse("0.35.5") or ao_btn.selected
+        unlit_btn.unusable = ao_btn.selected
         self.update_content(eye)
         self.update_content(color_btn)
         self.update_content(sel_only)
@@ -366,7 +364,7 @@ class MSMS(nanome.AsyncPluginInstance):
         self.update_content(button)
 
         unlit_btn = self.menu.root.find_node("Unlit").get_content()
-        unlit_btn.unusable = self._nanome_version < version.parse("0.35.5") or button.selected
+        unlit_btn.unusable = button.selected
         self.update_content(unlit_btn)
 
         if not complex_id in self._msms_instances:
