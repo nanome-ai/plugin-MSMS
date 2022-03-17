@@ -1,14 +1,15 @@
+import asyncio
+import os
+import subprocess
+import sys
+import tempfile
+
 import nanome
-from nanome.util import Logs, enums
+import numpy as np
+import randomcolor
 from nanome.api import shapes
 from nanome.api.shapes import Shape
-import tempfile
-import sys
-import subprocess
-import os
-import numpy as np
-import asyncio
-import randomcolor
+from nanome.util import Logs, enums
 
 
 class MSMSInstance():
@@ -36,6 +37,7 @@ class MSMSInstance():
         self._msms_hdensity = 3
 
         self._alpha = 255
+        self._unlit = False
         self._colorv3 = nanome.util.Vector3(255, 255, 255)
         self._color_scheme = enums.ColorScheme.Monochrome
 
@@ -256,6 +258,17 @@ class MSMSInstance():
             if recompute:
                 await self.compute_mesh()
 
+    async def set_unlit(self, unlit):
+        if self._unlit != unlit:
+            self._unlit = unlit
+            await self.finished()
+            if self.nanome_mesh:
+                if hasattr(self.nanome_mesh, "unlit"):
+                    self._is_busy = True
+                    self.nanome_mesh.unlit = self._unlit
+                    self.upload_mesh()
+                    await self.finished()
+
     async def finished(self):
         if not self._is_busy:
             return
@@ -430,6 +443,7 @@ class MSMSInstance():
         self.nanome_mesh.anchors[0].target = self._complex.index
         self.nanome_mesh.color = nanome.util.Color(self._colorv3.x, self._colorv3.y, self._colorv3.z, self._alpha)
         self.nanome_mesh.uv = np.repeat([0.0, 0.0], len(self.nanome_mesh.vertices) / 3)
+        self.nanome_mesh.unlit = self._unlit
 
 
 def compute_MSMS(positions, radii, probe_radius, density, hdensity):
