@@ -1,3 +1,3 @@
-nanome=0.35.8
+nanome==0.36.3
 numpy==1.21.5
 randomcolor

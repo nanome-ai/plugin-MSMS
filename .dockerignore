@@ -1,0 +1,6 @@
+.git
+**/__pycache__
+AO_binaries
+MSMS_binaries
+!AO_binaries/Linux64
+!MSMS_binaries/Linux
