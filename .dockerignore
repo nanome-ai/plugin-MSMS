@@ -1,6 +1,6 @@
 .git
 **/__pycache__
-AO_binaries
-MSMS_binaries
-!AO_binaries/Linux64
-!MSMS_binaries/Linux
+nanome_msms/AO_binaries
+nanome_msms/MSMS_binaries
+!nanome_msms/AO_binaries/Linux64
+!nanome_msms/MSMS_binaries/Linux
