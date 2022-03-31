@@ -1,4 +1,4 @@
-from nanome_msms import MSMS
+from plugin import MSMS
 
 if __name__ == "__main__":
     MSMS.main()

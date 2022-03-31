@@ -9,9 +9,9 @@ RUN wget -q https://github.com/embree/embree/releases/download/v3.13.1/embree-3.
   wget -q https://github.com/oneapi-src/oneTBB/releases/download/v2021.4.0/oneapi-tbb-2021.4.0-lin.tgz &&\
   tar xzf embree-3.13.1.x86_64.linux.tar.gz &&\
   tar xzf oneapi-tbb-2021.4.0-lin.tgz &&\
-  mkdir -p /app/nanome_msms/AO_binaries/Linux64/ &&\
-  cp embree-3.13.1.x86_64.linux/lib/lib* /app/nanome_msms/AO_binaries/Linux64/ &&\
-  cp oneapi-tbb-2021.4.0/lib/intel64/gcc4.8/lib* /app/nanome_msms/AO_binaries/Linux64/ &&\
+  mkdir -p /app/plugin/AO_binaries/Linux64/ &&\
+  cp embree-3.13.1.x86_64.linux/lib/lib* /app/plugin/AO_binaries/Linux64/ &&\
+  cp oneapi-tbb-2021.4.0/lib/intel64/gcc4.8/lib* /app/plugin/AO_binaries/Linux64/ &&\
   rm -r embree-3.13.1.x86_64.linux* oneapi-tbb-2021.4.0*
 
 ARG CACHEBUST
@@ -20,6 +20,6 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-RUN chmod +x /app/nanome_msms/AO_binaries/Linux64/AOEmbree
+RUN chmod +x /app/plugin/AO_binaries/Linux64/AOEmbree
 
 CMD python run.py ${ARGS}
