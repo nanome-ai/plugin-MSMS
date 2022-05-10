@@ -3,16 +3,15 @@
 A Nanome Plugin to run [MSMS](https://www.scripps.edu/sanner/html/msms_home.html) that computes molecular surfaces and load them in Nanome.
 (Molecular Surface by Michael Sanner)
 
-Optionally, this plugin computes Ambient Occlusion (AO) to darken buried parts of the molecular surfaces using https://github.com/nezix/AOEmbree
+This plugin also computes Ambient Occlusion (AO) to darken buried parts of the molecular surfaces using https://github.com/nezix/AOEmbree
 
 
-<img src="https://user-images.githubusercontent.com/9949327/143027625-b0ab5197-005e-49f9-9e31-6f8595d6800a.png" width="500"/>
-<img src="https://user-images.githubusercontent.com/9949327/137134953-75b06353-2a60-44a2-9235-ee1589304da0.png" width="200"/>
+<img width="400" alt="MSMS Tab 1" src="https://user-images.githubusercontent.com/18257337/167722210-da109f46-be19-4fae-9f29-f4b54c46ab7d.png">
+<img width="400" alt="MSMS Tab 2" src="https://user-images.githubusercontent.com/18257337/167722219-46fbc6cc-e388-4a1d-ba0c-2271da8f4ee3.png">
 
 ## Dependencies
 
 [Docker](https://docs.docker.com/get-docker/)
-[Git LFS](https://git-lfs.github.com/)
 
 ## Usage
 
@@ -25,12 +24,6 @@ $ ./deploy.sh -a <plugin_server_address> [optional args]
 ```
 
 ## Development
-
-After cloning, make sure LFS files are checked out.
-```sh
-git lfs fetch
-git lfs checkout
-```
 
 To run the MSMS plugin with autoreload:
 
