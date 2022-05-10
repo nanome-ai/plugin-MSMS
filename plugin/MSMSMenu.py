@@ -144,14 +144,25 @@ class MSMS(nanome.AsyncPluginInstance):
         for complex in complexes:
             ddi = ui.DropdownItem(complex.full_name)
             ddi.index = complex.index
+            if self.selected_complex and ddi.index == self.selected_complex.index:
+                ddi.selected = True
             self.dd_entries.items.append(ddi)
         self.update_content(self.dd_entries)
 
         indices = [complex.index for complex in complexes]
+        if self.selected_complex and self.selected_complex.index not in indices:
+            nanome.util.Logs.message('deleted selected complex')
+            self.selected_complex = None
+            self.selected_chains.clear()
+            self.ln_no_entry.enabled = True
+            self.ln_chains.enabled = False
+            self.update_node(self.ln_no_entry, self.ln_chains)
+
         update_surface_list = False
         for surface in self.surfaces:
-            if surface.index in indices:
+            if surface.index not in indices:
                 update_surface_list = True
+                self.surfaces.remove(surface)
                 surface.destroy()
         if update_surface_list:
             self.update_surface_list()
