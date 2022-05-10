@@ -1,3 +1,1 @@
-nanome==0.36.3
-numpy==1.21.5
-randomcolor
+nanome==0.37.1
