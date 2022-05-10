@@ -2,9 +2,7 @@
 **/__pycache__
 *
 !plugin
-plugin/AO_binaries
-plugin/MSMS_binaries
-!plugin/AO_binaries/Linux64
-!plugin/MSMS_binaries/Linux
+plugin/bin
+!plugin/bin/linux
 !requirements.txt
 !run.py
