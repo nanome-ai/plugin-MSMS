@@ -157,6 +157,7 @@ class MSMSInstance:
                 f.write(f'f {self.triangles[i] + 1} {self.triangles[i + 1] + 1} {self.triangles[i + 2] + 1}\n')
 
         output = ''
+
         def on_output(text):
             nonlocal output
             output += text
@@ -271,5 +272,5 @@ class MSMSInstance:
         for i in range(self.num_vertices):
             j = i * 4
             ao = self.ao[i]
-            r, g, b = self.colors[j:j+3]
-            self.mesh.colors[j:j+3] = [r*ao, g*ao, b*ao]
+            r, g, b = self.colors[j:j + 3]
+            self.mesh.colors[j:j + 3] = [r * ao, g * ao, b * ao]

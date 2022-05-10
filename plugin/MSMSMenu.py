@@ -15,6 +15,7 @@ INVISIBLE_ICON = os.path.join(BASE_DIR, 'assets/invisible.png')
 
 NO_CALLBACK = lambda *_: None
 
+
 class MSMS(nanome.AsyncPluginInstance):
     def start(self):
         self.set_plugin_list_button(self.PluginListButtonType.run, 'Open')
@@ -450,6 +451,7 @@ def main():
     plugin = nanome.Plugin("MSMS", "Run MSMS and load the molecular surface in Nanome.", "Computation", False)
     plugin.set_plugin_class(MSMS)
     plugin.run()
+
 
 if __name__ == "__main__":
     main()
