@@ -151,7 +151,6 @@ class MSMS(nanome.AsyncPluginInstance):
 
         indices = [complex.index for complex in complexes]
         if self.selected_complex and self.selected_complex.index not in indices:
-            nanome.util.Logs.message('deleted selected complex')
             self.selected_complex = None
             self.selected_chains.clear()
             self.ln_no_entry.enabled = True

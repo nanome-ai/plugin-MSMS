@@ -173,7 +173,6 @@ class MSMSInstance:
         await p.start()
 
         ao = output.split()
-        Logs.message(len(ao), self.num_vertices)
         if len(ao) != self.num_vertices:
             Logs.warning('Failed to run AOEmbree')
             return
