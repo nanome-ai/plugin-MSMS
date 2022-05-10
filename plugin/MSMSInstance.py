@@ -124,7 +124,9 @@ class MSMSInstance:
             '-hdensity', str(MSMS_HDENSITY),
             '-no_area', '-no_header'
         ]
-        await p.start()
+        exit_code = await p.start()
+        if exit_code != 0:
+            raise Exception('Failed to run MSMS')
 
         if os.path.isfile(msms_output.name + '.vert') and os.path.isfile(msms_output.name + '.face'):
             with open(msms_output.name + '.vert', 'r') as f:
@@ -171,10 +173,10 @@ class MSMSInstance:
             '-s', str(AO_STEPS),
             '-d', str(AO_MAX_DIST)
         ]
-        await p.start()
+        exit_code = await p.start()
 
         ao = output.split()
-        if len(ao) != self.num_vertices:
+        if exit_code != 0 or len(ao) != self.num_vertices:
             Logs.warning('Failed to run AOEmbree')
             return
 
