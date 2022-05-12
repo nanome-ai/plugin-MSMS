@@ -480,6 +480,7 @@ class MSMS(nanome.AsyncPluginInstance):
             self.ln_applying_color.enabled = False
             self.update_node(self.ln_applying_color)
 
+
 def main():
     plugin = nanome.Plugin("MSMS", "Run MSMS and load the molecular surface in Nanome.", "Computation", False)
     plugin.set_plugin_class(MSMS)
