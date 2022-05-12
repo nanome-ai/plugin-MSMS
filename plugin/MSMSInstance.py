@@ -14,7 +14,8 @@ AO_PATH = None
 
 MSMS_PROBE_RADIUS = 1.5
 MSMS_DENSITY = 10.0
-MSMS_HDENSITY = 20.0
+MSMS_HDENSITY_SM = 3.0
+MSMS_HDENSITY_LG = 1.0
 AO_STEPS = 512
 AO_MAX_DIST = 50.0
 
@@ -64,7 +65,6 @@ class MSMSInstance:
         self.name = name
         self.index = index
         self.atoms = atoms
-        self.temp_dir = tempfile.TemporaryDirectory()
 
         self.color_by: enums.ColorScheme = enums.ColorScheme.Chain
         self.color: Color = Color.from_hex(COLOR_PRESETS[randint(1, 12)][1])
@@ -93,61 +93,94 @@ class MSMSInstance:
         color.a = self.color.a
         self.color = color
 
-    async def generate(self):
-        await self.compute_msms()
-        if AO_PATH:
-            await self.compute_ao()
+    async def generate(self, by_chain=False, ao=True):
+        if by_chain:
+            await self.compute_msms_by_chain()
+        else:
+            await self.compute_msms(self.atoms)
+        if ao and AO_PATH:
+            # AO fails randomly on small meshes, retry a few times
+            for _ in range(3):
+                try:
+                    await self.compute_ao()
+                    break
+                except Exception as e:
+                    Logs.warning(e)
         await self.create_mesh()
 
     def destroy(self):
-        self.temp_dir.cleanup()
         self.mesh.destroy()
 
-    async def compute_msms(self):
-        msms_input = tempfile.NamedTemporaryFile(dir=self.temp_dir.name, suffix='.xyzr', delete=False)
-        msms_output = tempfile.NamedTemporaryFile(dir=self.temp_dir.name, suffix='.out', delete=False)
+    async def compute_msms_by_chain(self):
+        atoms_by_chain = [[]]
+        current_chain = self.atoms[0].chain.name
+        for atom in self.atoms:
+            if atom.chain.name != current_chain:
+                current_chain = atom.chain.name
+                atoms_by_chain.append([])
+            atoms_by_chain[-1].append(atom)
+
+        num_atoms = 0
+        for atoms in atoms_by_chain:
+            await self.compute_msms(atoms, num_atoms)
+            num_atoms += len(atoms)
+
+    async def compute_msms(self, atoms: 'list[nanome.structure.Atom]', index_offset=0):
+        temp_dir = tempfile.TemporaryDirectory()
+        msms_input = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.xyzr', delete=False)
+        msms_output = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.out', delete=False)
+        hdensity = MSMS_HDENSITY_SM if len(atoms) < 20000 else MSMS_HDENSITY_LG
 
         with open(msms_input.name, 'w') as f:
-            for atom in self.atoms:
+            for atom in atoms:
                 x, y, z = atom.position
                 # replace unknown atoms with carbon
                 r = 1.7 if atom.vdw_radius < 0.0001 else atom.vdw_radius
                 f.write(f'{x:.5f} {y:.5f} {z:.5f} {r:.5f}\n')
 
-        p = Process(MSMS_PATH, label='MSMS', output_text=True, timeout=0)
+        p = Process(MSMS_PATH, label=f'MSMS {len(atoms)} atoms', output_text=True, timeout=0)
         p.on_error = Logs.warning
         p.args = [
             '-if ', msms_input.name,
             '-of ', msms_output.name,
             '-probe_radius', str(MSMS_PROBE_RADIUS),
             '-density', str(MSMS_DENSITY),
-            '-hdensity', str(MSMS_HDENSITY),
-            '-no_area', '-no_header'
+            '-hdensity', str(hdensity),
+            '-no_area', '-no_header',
+            '-all_components'
         ]
         exit_code = await p.start()
-        if exit_code != 0:
+        if exit_code != 0 or not os.path.isfile(msms_output.name + '.vert'):
             raise Exception('Failed to run MSMS')
 
-        if os.path.isfile(msms_output.name + '.vert') and os.path.isfile(msms_output.name + '.face'):
-            with open(msms_output.name + '.vert', 'r') as f:
+        file_index = 0
+        while True:
+            name = msms_output.name
+            if file_index > 0:
+                name += f'_{file_index}'
+            if not os.path.isfile(name + '.vert'):
+                break
+            vertex_offset = self.num_vertices
+            with open(name + '.vert', 'r') as f:
                 for l in f.readlines():
                     if l.startswith('#'):
                         continue
                     s = l.split()
                     self.vertices += map(float, s[0:3])
                     self.normals += map(float, s[3:6])
-                    self.indices.append(int(s[7]) - 1)
-            with open(msms_output.name + '.face', 'r') as f:
+                    self.indices.append(int(s[7]) - 1 + index_offset)
+            with open(name + '.face', 'r') as f:
                 for l in f.readlines():
                     if l.startswith('#'):
                         continue
                     s = l.split()
-                    self.triangles += map(lambda x: int(x) - 1, s[0:3])
-        else:
-            raise Exception('Failed to run MSMS')
+                    self.triangles += [int(x) - 1 + vertex_offset for x in s[0:3]]
+            file_index += 1
 
     async def compute_ao(self):
-        ao_input = tempfile.NamedTemporaryFile(dir=self.temp_dir.name, suffix='.obj', delete=False)
+        temp_dir = tempfile.TemporaryDirectory()
+        ao_input = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.obj', delete=False)
+        output = ''
 
         with open(ao_input.name, 'w') as f:
             for v in range(self.num_vertices):
@@ -158,13 +191,11 @@ class MSMSInstance:
                 i = t * 3
                 f.write(f'f {self.triangles[i] + 1} {self.triangles[i + 1] + 1} {self.triangles[i + 2] + 1}\n')
 
-        output = ''
-
         def on_output(text):
             nonlocal output
             output += text
 
-        p = Process(AO_PATH, label='AOEmbree', output_text=True, timeout=0)
+        p = Process(AO_PATH, label=f'AOEmbree {self.num_vertices} vertices', output_text=True, timeout=0)
         p.on_output = on_output
         p.on_error = Logs.warning
         p.args = [
@@ -177,8 +208,7 @@ class MSMSInstance:
 
         ao = output.split()
         if exit_code != 0 or len(ao) != self.num_vertices:
-            Logs.warning('Failed to run AOEmbree')
-            return
+            raise Exception('Failed to run AOEmbree')
 
         self.ao = list(map(float, ao))
 
@@ -192,7 +222,8 @@ class MSMSInstance:
         self.mesh.triangles = self.triangles
         self.mesh.colors = [1, 1, 1, 1] * self.num_vertices
         self.mesh.color = Color.White()
-        self.apply_color()
+        self.mesh.unlit = len(self.ao) > 0
+        await self.apply_color()
 
     def toggle_visible(self, show=None):
         if show == self.visible:
@@ -201,7 +232,7 @@ class MSMSInstance:
         self.mesh.color.a = self.color.a if self.visible else 0
         self.mesh.upload()
 
-    def apply_color(self):
+    async def apply_color(self):
         if self.color_by == enums.ColorScheme.Monochrome:
             r, g, b = (c / 255 for c in self.color.rgb)
             self.colors = [r, g, b, 1] * self.num_vertices
@@ -214,9 +245,8 @@ class MSMSInstance:
         elif self.color_by == enums.ColorScheme.SecondaryStructure:
             self.apply_color_by_secondary_structure()
 
-        self.apply_ao()
         self.mesh.color.a = self.color.a
-        self.mesh.upload()
+        await self.apply_color_to_mesh()
 
     def apply_color_by_chain(self):
         chain_names = sorted(set(atom.chain.name for atom in self.atoms))
@@ -266,13 +296,13 @@ class MSMSInstance:
         for i in self.indices:
             self.colors += color_per_atom[i]
 
-    def apply_ao(self):
-        if not self.ao:
-            Logs.message('No AO to apply')
-            return
-
+    async def apply_color_to_mesh(self):
+        has_ao = len(self.ao) > 0
         for i in range(self.num_vertices):
             j = i * 4
-            ao = self.ao[i]
             r, g, b = self.colors[j:j + 3]
+            ao = self.ao[i] if has_ao else 1
             self.mesh.colors[j:j + 3] = [r * ao, g * ao, b * ao]
+
+        if self.visible:
+            await self.mesh.upload()

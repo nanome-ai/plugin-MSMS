@@ -2,6 +2,7 @@ import os
 
 import nanome
 from nanome import ui
+from nanome.api.structure import Atom, Complex
 from nanome.util import async_callback, enums, Color
 
 from .MSMSInstance import COLOR_BY_OPTIONS, COLOR_PRESETS, MSMSInstance
@@ -13,16 +14,19 @@ DELETE_ICON = os.path.join(BASE_DIR, 'assets/delete.png')
 VISIBLE_ICON = os.path.join(BASE_DIR, 'assets/visible.png')
 INVISIBLE_ICON = os.path.join(BASE_DIR, 'assets/invisible.png')
 
-NO_CALLBACK = lambda *_: None
-
 
 class MSMS(nanome.AsyncPluginInstance):
     def start(self):
         self.set_plugin_list_button(self.PluginListButtonType.run, 'Open')
 
-        self.selected_complex: nanome.structure.Complex = None
+        self.selected_complex: Complex = None
         self.selected_chains: set[str] = set()
+        self.selected_atoms: list[Atom] = []
+
+        self.include_waters = False
         self.selection_only = False
+        self.compute_by_chain = True
+        self.ambient_occlusion = True
 
         self.selected_surface_btn: ui.Button = None
         self.selected_surface: MSMSInstance = None
@@ -57,6 +61,8 @@ class MSMS(nanome.AsyncPluginInstance):
         # tab 1
         self.ln_chains: ui.LayoutNode = root.find_node('Chains')
         self.ln_no_entry: ui.LayoutNode = root.find_node('No Entry')
+        self.ln_loading_chains: ui.LayoutNode = root.find_node('Loading Chains')
+
         self.dd_entries: ui.Dropdown = root.find_node('Dropdown Entry').get_content()
         self.dd_entries.register_item_clicked_callback(self.select_entry)
         self.lst_chains: ui.UIList = root.find_node('List Chains').get_content()
@@ -66,9 +72,26 @@ class MSMS(nanome.AsyncPluginInstance):
         self.btn_all_chains.toggle_on_press = True
 
         self.lbl_selection: ui.Label = root.find_node('Label Selection').get_content()
-        ln_selection_only: ui.LayoutNode = root.find_node('Button Selection Only')
+
+        ln_include_waters: ui.LayoutNode = root.find_node('Toggle Include Waters')
+        self.btn_include_waters: ui.Button = ln_include_waters.add_new_toggle_switch('Include Waters')
+        self.btn_include_waters.register_pressed_callback(self.toggle_include_waters)
+        self.btn_include_waters.selected = self.include_waters
+
+        ln_selection_only: ui.LayoutNode = root.find_node('Toggle Selection Only')
         self.btn_selection_only: ui.Button = ln_selection_only.add_new_toggle_switch('Selection Only')
         self.btn_selection_only.register_pressed_callback(self.toggle_selection_only)
+        self.btn_selection_only.selected = self.selection_only
+
+        ln_compute_by_chain: ui.LayoutNode = root.find_node('Toggle Compute By Chain')
+        self.btn_compute_by_chain: ui.Button = ln_compute_by_chain.add_new_toggle_switch('Compute by Chain')
+        self.btn_compute_by_chain.register_pressed_callback(self.toggle_compute_by_chain)
+        self.btn_compute_by_chain.selected = self.compute_by_chain
+
+        ln_ambient_occlusion: ui.LayoutNode = root.find_node('Toggle Ambient Occlusion')
+        self.btn_ambient_occlusion: ui.Button = ln_ambient_occlusion.add_new_toggle_switch('Ambient Occlusion')
+        self.btn_ambient_occlusion.register_pressed_callback(self.toggle_ambient_occlusion)
+        self.btn_ambient_occlusion.selected = self.ambient_occlusion
 
         self.btn_generate: ui.Button = root.find_node('Button Generate').get_content()
         self.btn_generate.register_pressed_callback(self.generate_msms)
@@ -81,6 +104,7 @@ class MSMS(nanome.AsyncPluginInstance):
         self.btn_toggle_all.register_pressed_callback(self.toggle_all_surfaces)
         self.btn_delete_all.register_pressed_callback(self.delete_all_surfaces)
 
+        self.ln_applying_color: ui.LayoutNode = root.find_node('Applying Color')
         self.ln_color_options: ui.LayoutNode = root.find_node('Color Options')
         self.ln_no_surface: ui.LayoutNode = root.find_node('No Surface')
 
@@ -109,7 +133,7 @@ class MSMS(nanome.AsyncPluginInstance):
 
         self.init_color_dropdowns()
         self.update_entry_list()
-        self.update_selection_text()
+        self.update_selection()
         self.update_surface_list()
 
     def init_color_dropdowns(self):
@@ -169,32 +193,25 @@ class MSMS(nanome.AsyncPluginInstance):
 
     @async_callback
     async def select_entry(self, dd: ui.Dropdown, ddi: ui.DropdownItem):
-        self.lst_chains.items.clear()
-        ln = ui.LayoutNode()
-        lbl = ln.add_new_label('loading chains...')
-        lbl.text_auto_size = False
-        lbl.text_size = 0.3
-        lbl.text_horizontal_align = enums.HorizAlignOptions.Middle
-        lbl.text_vertical_align = enums.VertAlignOptions.Bottom
-        self.lst_chains.items.append(ln)
-
         self.ln_no_entry.enabled = False
-        self.ln_chains.enabled = True
-        self.update_node(self.ln_no_entry, self.ln_chains)
-
-        if self.selected_complex:
-            self.selected_complex.register_complex_updated_callback(NO_CALLBACK)
-            self.selected_complex.register_selection_changed_callback(NO_CALLBACK)
+        self.ln_loading_chains.enabled = True
+        self.ln_chains.enabled = False
+        self.update_node(self.ln_no_entry, self.ln_loading_chains, self.ln_chains)
 
         def update_complex(complex):
+            if self.selected_complex and complex.index != self.selected_complex.index:
+                return
             self.selected_complex = complex
-            self.update_selection_text()
+            self.update_selection()
 
         complexes = await self.request_complexes([ddi.index])
-        self.selected_complex: nanome.structure.Complex = complexes[0]
+        self.selected_complex: Complex = complexes[0]
         self.selected_complex.register_complex_updated_callback(update_complex)
         self.selected_complex.register_selection_changed_callback(update_complex)
         self.selected_chains = set()
+
+        self.ln_chains.enabled = True
+        self.ln_loading_chains.enabled = False
         self.btn_all_chains.selected = False
 
         self.lst_chains.items.clear()
@@ -205,8 +222,8 @@ class MSMS(nanome.AsyncPluginInstance):
             btn.toggle_on_press = True
             btn.register_pressed_callback(self.select_chain)
             self.lst_chains.items.append(ln)
-        self.update_content(self.lst_chains, self.btn_all_chains)
-        self.update_selection_text()
+        self.update_node(self.ln_chains, self.ln_loading_chains)
+        self.update_selection()
 
     def select_chain(self, btn: ui.Button):
         if btn.selected:
@@ -217,7 +234,7 @@ class MSMS(nanome.AsyncPluginInstance):
         all_selected = len(self.selected_chains) == len(list(self.selected_complex.chains))
         self.btn_all_chains.selected = all_selected
         self.update_content(self.btn_all_chains)
-        self.update_selection_text()
+        self.update_selection()
 
     def toggle_all_chains(self, btn: ui.Button):
         if btn.selected:
@@ -229,14 +246,26 @@ class MSMS(nanome.AsyncPluginInstance):
             ln.get_content().selected = btn.selected
 
         self.update_content(self.lst_chains)
-        self.update_selection_text()
+        self.update_selection()
+
+    def toggle_include_waters(self, btn: ui.Button):
+        self.include_waters = btn.selected
+        self.update_selection()
 
     def toggle_selection_only(self, btn: ui.Button):
         self.selection_only = btn.selected
-        self.update_selection_text()
+        self.update_selection()
 
-    def update_selection_text(self):
+    def toggle_compute_by_chain(self, btn: ui.Button):
+        self.compute_by_chain = btn.selected
+
+    def toggle_ambient_occlusion(self, btn: ui.Button):
+        self.ambient_occlusion = btn.selected
+
+    def update_selection(self):
         num_atoms = 0
+        self.selected_atoms = []
+
         if not self.selected_complex:
             self.lbl_selection.text_value = 'No entry selected'
         elif not self.selected_chains:
@@ -247,10 +276,15 @@ class MSMS(nanome.AsyncPluginInstance):
                 if chain.name not in self.selected_chains:
                     continue
                 for atom in chain.atoms:
+                    if not self.include_waters and atom.symbol in ['H', 'O']:
+                        elements = sorted(a.symbol for a in atom.residue.atoms)
+                        if elements == ['O'] or elements == ['H', 'H', 'O']:
+                            continue
                     if self.selection_only and not atom.selected:
                         continue
-                    num_atoms += 1
+                    self.selected_atoms.append(atom)
 
+            num_atoms = len(self.selected_atoms)
             chains_text = f'{num_chains} chain{"s" if num_chains != 1 else ""} selected'
             atoms_text = f'{num_atoms} atom{"s" if num_atoms != 1 else ""} selected'
             self.lbl_selection.text_value = f'{chains_text}\n{atoms_text}'
@@ -263,23 +297,14 @@ class MSMS(nanome.AsyncPluginInstance):
         chain_names = ', '.join(sorted(self.selected_chains))
         name = f'{self.selected_complex.full_name} <size=50%>{chain_names}</size>'
         index = self.selected_complex.index
-        atoms = []
-
-        for chain in self.selected_complex.chains:
-            if chain.name not in self.selected_chains:
-                continue
-            for atom in chain.atoms:
-                if self.selection_only and not atom.selected:
-                    continue
-                atoms.append(atom)
 
         btn.text.value.set_all('Generating...')
         btn.unusable = True
         self.update_content(self.btn_generate)
 
         try:
-            surface = MSMSInstance(name, index, atoms)
-            await surface.generate()
+            surface = MSMSInstance(name, index, self.selected_atoms)
+            await surface.generate(by_chain=self.compute_by_chain, ao=self.ambient_occlusion)
             self.surfaces.append(surface)
 
             self.selected_surface = surface
@@ -380,13 +405,12 @@ class MSMS(nanome.AsyncPluginInstance):
 
     def select_color_by(self, dd: ui.Dropdown, ddi: ui.DropdownItem):
         self.selected_surface.color_by = ddi.value
-        self.selected_surface.apply_color()
+        self.apply_color()
 
     def select_preset(self, dd: ui.Dropdown, ddi: ui.DropdownItem):
-        surface = self.selected_surface
-        surface.hex_color = ddi.value
+        self.selected_surface.hex_color = ddi.value
         self.update_color_inputs()
-        surface.apply_color()
+        self.apply_color()
 
     def update_color(self, ui):
         to_update = [self.dd_preset]
@@ -412,7 +436,7 @@ class MSMS(nanome.AsyncPluginInstance):
         self.selected_surface.color = Color(r, g, b, a)
         self.update_color_dropdowns()
         self.update_content(to_update)
-        self.selected_surface.apply_color()
+        self.apply_color()
 
     def update_color_dropdowns(self):
         for ddi in self.dd_color_by.items:
@@ -446,6 +470,15 @@ class MSMS(nanome.AsyncPluginInstance):
             self.sld_red, self.sld_green, self.sld_blue, self.sld_alpha,
             self.inp_red, self.inp_green, self.inp_blue, self.inp_alpha)
 
+    @async_callback
+    async def apply_color(self):
+        if self.selected_surface.visible:
+            self.ln_applying_color.enabled = True
+            self.update_node(self.ln_applying_color)
+        await self.selected_surface.apply_color()
+        if self.selected_surface.visible:
+            self.ln_applying_color.enabled = False
+            self.update_node(self.ln_applying_color)
 
 def main():
     plugin = nanome.Plugin("MSMS", "Run MSMS and load the molecular surface in Nanome.", "Computation", False)
