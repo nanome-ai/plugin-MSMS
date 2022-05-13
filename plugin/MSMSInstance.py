@@ -20,7 +20,11 @@ AO_STEPS = 512
 AO_MAX_DIST = 50.0
 
 with open(os.path.join(BASE_DIR, 'assets/colors.json')) as f:
-    COLOR_BY_ELEMENT = json.load(f)
+    COLORS = json.load(f)
+
+COLOR_PRESETS = COLORS['presets']
+COLOR_BY_ELEMENT = COLORS['element']
+RESIDUE_HYDROPHOBICITY = COLORS['hydrophobicity']
 
 COLOR_BY_OPTIONS = [
     ('All', enums.ColorScheme.Monochrome),
@@ -28,25 +32,6 @@ COLOR_BY_OPTIONS = [
     ('Residue', enums.ColorScheme.Residue),
     ('Element', enums.ColorScheme.Element),
     ('Secondary Structure', enums.ColorScheme.SecondaryStructure),
-]
-
-COLOR_PRESETS = [
-    ('Custom', '#808080'),
-    ('Red', '#ff0000'),
-    ('Orange', '#ff8000'),
-    ('Yellow', '#ffff00'),
-    ('Yellow Green', '#80ff00'),
-    ('Green', '#00ff00'),
-    ('Aqua Green', '#00ff80'),
-    ('Cyan', '#00ffff'),
-    ('Azure', '#0080ff'),
-    ('Blue', '#0000ff'),
-    ('Violet', '#8000ff'),
-    ('Magenta', '#ff00ff'),
-    ('Pink', '#ff0080'),
-    ('White', '#ffffff'),
-    ('Gray', '#808080'),
-    ('Black', '#000000'),
 ]
 
 if sys.platform == 'linux':
@@ -255,11 +240,16 @@ class MSMSInstance:
         self.apply_color_per_atom(color_per_atom)
 
     def apply_color_by_residue(self):
-        residue_names = sorted(set(atom.residue.name for atom in self.atoms))
+        # color by hydrophobicity, most = color, least = white
+        min_hp = RESIDUE_HYDROPHOBICITY['min']
+        max_hp = RESIDUE_HYDROPHOBICITY['max']
         color_per_atom = []
         for atom in self.atoms:
-            i = residue_names.index(atom.residue.name)
-            t = i / len(residue_names)
+            hp = RESIDUE_HYDROPHOBICITY.get(atom.residue.name)
+            if hp is None:
+                color_per_atom.append([0.5, 0.5, 0.5, 1])
+                continue
+            t = 1 - (hp - min_hp) / (max_hp - min_hp)
             r, g, b = (c / 255 for c in self.color.rgb)
             r, g, b = (c + (1 - c) * t for c in (r, g, b))
             color_per_atom.append([r, g, b, 1])
