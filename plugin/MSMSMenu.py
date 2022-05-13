@@ -181,6 +181,7 @@ class MSMS(nanome.AsyncPluginInstance):
             self.ln_no_entry.enabled = True
             self.ln_chains.enabled = False
             self.update_node(self.ln_no_entry, self.ln_chains)
+            self.update_selection()
 
         update_surface_list = False
         for surface in self.surfaces:
