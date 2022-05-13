@@ -99,13 +99,7 @@ class MSMSInstance:
         else:
             await self.compute_msms(self.atoms)
         if ao and AO_PATH:
-            # AO fails randomly on small meshes, retry a few times
-            for _ in range(3):
-                try:
-                    await self.compute_ao()
-                    break
-                except Exception as e:
-                    Logs.warning(e)
+            await self.compute_ao()
         await self.create_mesh()
 
     def destroy(self):
@@ -180,7 +174,7 @@ class MSMSInstance:
     async def compute_ao(self):
         temp_dir = tempfile.TemporaryDirectory()
         ao_input = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.obj', delete=False)
-        output = ''
+        ao_output = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.out', delete=False)
 
         with open(ao_input.name, 'w') as f:
             for v in range(self.num_vertices):
@@ -191,26 +185,27 @@ class MSMSInstance:
                 i = t * 3
                 f.write(f'f {self.triangles[i] + 1} {self.triangles[i + 1] + 1} {self.triangles[i + 2] + 1}\n')
 
-        def on_output(text):
-            nonlocal output
-            output += text
-
         p = Process(AO_PATH, label=f'AOEmbree {self.num_vertices} vertices', output_text=True, timeout=0)
-        p.on_output = on_output
         p.on_error = Logs.warning
         p.args = [
             '-a', '-n',
             '-i', ao_input.name,
+            '-o', ao_output.name,
             '-s', str(AO_STEPS),
             '-d', str(AO_MAX_DIST)
         ]
         exit_code = await p.start()
 
-        ao = output.split()
-        if exit_code != 0 or len(ao) != self.num_vertices:
-            raise Exception('Failed to run AOEmbree')
+        if exit_code != 0 or not os.path.isfile(ao_output.name):
+            Logs.warning('Failed to run AOEmbree')
+            return
 
-        self.ao = list(map(float, ao))
+        with open(ao_output.name, 'r') as f:
+            data = ' '.join(f.readlines()).split()
+            if len(data) != self.num_vertices:
+                Logs.warning(f'AOEmbree output has wrong number of vertices, expected {self.num_vertices}, got {len(data)}')
+                return
+            self.ao = list(map(float, data))
 
     async def create_mesh(self):
         anchor: shapes.Anchor = self.mesh.anchors[0]
