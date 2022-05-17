@@ -24,6 +24,7 @@ with open(os.path.join(BASE_DIR, 'assets/colors.json')) as f:
 
 COLOR_PRESETS = COLORS['presets']
 COLOR_BY_ELEMENT = COLORS['element']
+COLOR_BY_RESIDUE = COLORS['residue']
 RESIDUE_HYDROPHOBICITY = COLORS['hydrophobicity']
 
 COLOR_BY_OPTIONS = [
@@ -31,6 +32,7 @@ COLOR_BY_OPTIONS = [
     ('Chain', enums.ColorScheme.Chain),
     ('Residue', enums.ColorScheme.Residue),
     ('Element', enums.ColorScheme.Element),
+    ('Hydrophobicity', enums.ColorScheme.Hydrophobicity),
     ('Secondary Structure', enums.ColorScheme.SecondaryStructure),
 ]
 
@@ -222,6 +224,8 @@ class MSMSInstance:
             self.apply_color_by_residue()
         elif self.color_by == enums.ColorScheme.Element:
             self.apply_color_by_element()
+        elif self.color_by == enums.ColorScheme.Hydrophobicity:
+            self.apply_color_by_hydrophobicity()
         elif self.color_by == enums.ColorScheme.SecondaryStructure:
             self.apply_color_by_secondary_structure()
 
@@ -240,6 +244,22 @@ class MSMSInstance:
         self.apply_color_per_atom(color_per_atom)
 
     def apply_color_by_residue(self):
+        color_per_atom = []
+        for atom in self.atoms:
+            hex = COLOR_BY_RESIDUE.get(atom.residue.name.upper(), '#808080')
+            r, g, b = (c / 255 for c in Color.from_hex(hex).rgb)
+            color_per_atom.append([r, g, b, 1])
+        self.apply_color_per_atom(color_per_atom)
+
+    def apply_color_by_element(self):
+        color_per_atom = []
+        for atom in self.atoms:
+            hex = COLOR_BY_ELEMENT.get(atom.symbol.lower(), '#ff00ff')
+            r, g, b = (c / 255 for c in Color.from_hex(hex).rgb)
+            color_per_atom.append([r, g, b, 1])
+        self.apply_color_per_atom(color_per_atom)
+
+    def apply_color_by_hydrophobicity(self):
         # color by hydrophobicity, most = color, least = white
         min_hp = RESIDUE_HYDROPHOBICITY['min']
         max_hp = RESIDUE_HYDROPHOBICITY['max']
@@ -252,14 +272,6 @@ class MSMSInstance:
             t = 1 - (hp - min_hp) / (max_hp - min_hp)
             r, g, b = (c / 255 for c in self.color.rgb)
             r, g, b = (c + (1 - c) * t for c in (r, g, b))
-            color_per_atom.append([r, g, b, 1])
-        self.apply_color_per_atom(color_per_atom)
-
-    def apply_color_by_element(self):
-        color_per_atom = []
-        for atom in self.atoms:
-            hex = COLOR_BY_ELEMENT.get(atom.symbol.lower(), '#ff00ff')
-            r, g, b = (c / 255 for c in Color.from_hex(hex).rgb)
             color_per_atom.append([r, g, b, 1])
         self.apply_color_per_atom(color_per_atom)
 
