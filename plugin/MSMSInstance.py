@@ -36,6 +36,12 @@ COLOR_BY_OPTIONS = [
     ('Secondary Structure', enums.ColorScheme.SecondaryStructure),
 ]
 
+COLOR_BY_CAN_USE_CUSTOM = [
+    enums.ColorScheme.Monochrome,
+    enums.ColorScheme.Chain,
+    enums.ColorScheme.Hydrophobicity,
+]
+
 if sys.platform == 'linux':
     AO_PATH = os.path.join(BASE_DIR, 'bin/linux/AOEmbree')
     MSMS_PATH = os.path.join(BASE_DIR, 'bin/linux/msms')

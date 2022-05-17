@@ -5,7 +5,7 @@ from nanome import ui
 from nanome.api.structure import Atom, Complex
 from nanome.util import async_callback, enums, Color
 
-from .MSMSInstance import COLOR_BY_OPTIONS, COLOR_PRESETS, MSMSInstance
+from .MSMSInstance import COLOR_BY_OPTIONS, COLOR_BY_CAN_USE_CUSTOM, COLOR_PRESETS, MSMSInstance
 
 BASE_DIR = os.path.join(os.path.dirname(__file__))
 MENU_PATH = os.path.join(BASE_DIR, 'assets/menu.json')
@@ -113,6 +113,8 @@ class MSMS(nanome.AsyncPluginInstance):
         self.ln_applying_color: ui.LayoutNode = root.find_node('Applying Color')
         self.ln_color_options: ui.LayoutNode = root.find_node('Color Options')
         self.ln_no_surface: ui.LayoutNode = root.find_node('No Surface')
+        self.ln_custom_color: ui.LayoutNode = root.find_node('Custom Color')
+        self.ln_no_color: ui.LayoutNode = root.find_node('No Color')
 
         self.dd_color_by: ui.Dropdown = root.find_node('Dropdown Color By').get_content()
         self.dd_preset: ui.Dropdown = root.find_node('Dropdown Preset').get_content()
@@ -417,6 +419,12 @@ class MSMS(nanome.AsyncPluginInstance):
         self.update_surface_list()
 
     def select_color_by(self, dd: ui.Dropdown, ddi: ui.DropdownItem):
+        old_can_use_custom = self.selected_surface.color_by in COLOR_BY_CAN_USE_CUSTOM
+        new_can_use_custom = ddi.value in COLOR_BY_CAN_USE_CUSTOM
+        if new_can_use_custom != old_can_use_custom:
+            self.ln_custom_color.enabled = new_can_use_custom
+            self.ln_no_color.enabled = not new_can_use_custom
+            self.update_node(self.ln_custom_color, self.ln_no_color)
         self.selected_surface.color_by = ddi.value
         self.apply_color()
 
