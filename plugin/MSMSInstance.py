@@ -59,6 +59,10 @@ class MSMSInstance:
         self.index = index
         self.atoms = atoms
 
+        self.active_process: Process = None
+        self.done = False
+        self.canceled = False
+
         self.color_by: enums.ColorScheme = enums.ColorScheme.Chain
         self.color: Color = Color.from_hex(COLOR_PRESETS[randint(1, 12)][1])
         self.visible = True
@@ -87,16 +91,28 @@ class MSMSInstance:
         self.color = color
 
     async def generate(self, by_chain=False, ao=True):
-        if by_chain:
-            await self.compute_msms_by_chain()
-        else:
-            await self.compute_msms(self.atoms)
-        if ao and AO_PATH:
-            await self.compute_ao()
-        await self.create_mesh()
+        try:
+            if by_chain:
+                await self.compute_msms_by_chain()
+            else:
+                await self.compute_msms(self.atoms)
+            if ao and AO_PATH:
+                await self.compute_ao()
+            await self.create_mesh()
+            self.done = True
+        except Exception as e:
+            self.raise_if_canceled()
+            raise e
 
     def destroy(self):
+        self.canceled = True
+        if self.active_process:
+            self.active_process.stop()
         self.mesh.destroy()
+
+    def raise_if_canceled(self):
+        if self.canceled:
+            raise Exception('Canceled')
 
     async def compute_msms_by_chain(self):
         atoms_by_chain = [[]]
@@ -113,6 +129,7 @@ class MSMSInstance:
             num_atoms += len(atoms)
 
     async def compute_msms(self, atoms: 'list[nanome.structure.Atom]', index_offset=0):
+        self.raise_if_canceled()
         temp_dir = tempfile.TemporaryDirectory()
         msms_input = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.xyzr', delete=False)
         msms_output = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.out', delete=False)
@@ -136,7 +153,13 @@ class MSMSInstance:
             '-no_area', '-no_header',
             '-all_components'
         ]
+
+        self.raise_if_canceled()
+        self.active_process = p
         exit_code = await p.start()
+        self.active_process = None
+        self.raise_if_canceled()
+
         if exit_code != 0 or not os.path.isfile(msms_output.name + '.vert'):
             raise Exception('Failed to run MSMS')
 
@@ -165,6 +188,7 @@ class MSMSInstance:
             file_index += 1
 
     async def compute_ao(self):
+        self.raise_if_canceled()
         temp_dir = tempfile.TemporaryDirectory()
         ao_input = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.obj', delete=False)
         ao_output = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.out', delete=False)
@@ -187,7 +211,12 @@ class MSMSInstance:
             '-s', str(AO_STEPS),
             '-d', str(AO_MAX_DIST)
         ]
+
+        self.raise_if_canceled()
+        self.active_process = p
         exit_code = await p.start()
+        self.active_process = None
+        self.raise_if_canceled()
 
         if exit_code != 0 or not os.path.isfile(ao_output.name):
             Logs.warning('Failed to run AOEmbree')
@@ -201,6 +230,7 @@ class MSMSInstance:
             self.ao = list(map(float, data))
 
     async def create_mesh(self):
+        self.raise_if_canceled()
         anchor: shapes.Anchor = self.mesh.anchors[0]
         anchor.anchor_type = enums.ShapeAnchorType.Complex
         anchor.target = self.index
@@ -307,5 +337,5 @@ class MSMSInstance:
             ao = self.ao[i] if has_ao else 1
             self.mesh.colors[j:j + 3] = [r * ao, g * ao, b * ao]
 
-        if self.visible:
+        if self.visible and not self.canceled:
             await self.mesh.upload()

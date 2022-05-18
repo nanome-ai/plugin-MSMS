@@ -113,6 +113,7 @@ class MSMS(nanome.AsyncPluginInstance):
         self.ln_applying_color: ui.LayoutNode = root.find_node('Applying Color')
         self.ln_color_options: ui.LayoutNode = root.find_node('Color Options')
         self.ln_no_surface: ui.LayoutNode = root.find_node('No Surface')
+        self.ln_surface_generating: ui.LayoutNode = root.find_node('Surface Generating')
         self.ln_custom_color: ui.LayoutNode = root.find_node('Custom Color')
         self.ln_no_color: ui.LayoutNode = root.find_node('No Color')
 
@@ -224,10 +225,10 @@ class MSMS(nanome.AsyncPluginInstance):
         self.btn_all_chains.selected = False
 
         self.lst_chains.items.clear()
-        for chain in self.selected_complex.chains:
+        for chain in sorted(c.name for c in self.selected_complex.chains):
             ln = ui.LayoutNode()
-            btn = ln.add_new_button(chain.name)
-            btn.chain = chain.name
+            btn = ln.add_new_button(chain)
+            btn.chain = chain
             btn.toggle_on_press = True
             btn.register_pressed_callback(self.select_chain)
             self.lst_chains.items.append(ln)
@@ -309,30 +310,30 @@ class MSMS(nanome.AsyncPluginInstance):
 
     @async_callback
     async def generate_msms(self, btn: ui.Button):
-        chain_names = ', '.join(sorted(self.selected_chains))
-        name = f'{self.selected_complex.full_name} <size=50%>{chain_names}</size>'
+        chain_names = ' '.join(sorted(self.selected_chains))
+        name = f'{self.selected_complex.full_name} <size=40%>{chain_names}</size>'
         index = self.selected_complex.index
-
-        btn.text.value.set_all('Generating...')
-        btn.unusable = True
-        self.update_content(self.btn_generate)
 
         try:
             surface = MSMSInstance(name, index, self.selected_atoms)
-            await surface.generate(by_chain=self.compute_by_chain, ao=self.ambient_occlusion)
             self.surfaces.append(surface)
-
             self.selected_surface = surface
             self.update_surface_list()
             self.change_tab(self.btn_tab2)
             self.select_surface(self.selected_surface_btn)
+
+            await surface.generate(by_chain=self.compute_by_chain, ao=self.ambient_occlusion)
+            if self.selected_surface == surface:
+                self.select_surface(self.selected_surface_btn)
+            self.update_surface_list()
         except Exception as e:
+            if str(e) == 'Canceled':
+                return
             nanome.util.Logs.error(e)
             self.send_notification(enums.NotificationTypes.error, 'Error generating surface')
-
-        btn.text.value.set_all('Generate')
-        btn.unusable = False
-        self.update_content(self.btn_generate)
+            surface.destroy()
+            self.surfaces.remove(surface)
+            self.update_surface_list()
 
     def update_surface_list(self):
         self.lst_surfaces.items.clear()
@@ -348,13 +349,17 @@ class MSMS(nanome.AsyncPluginInstance):
                 self.selected_surface_btn = btn
             btn.register_pressed_callback(self.select_surface)
 
-            btn_toggle: ui.Button = ln.find_node('Button Toggle').get_content()
+            ln_btn_toggle: ui.LayoutNode = ln.find_node('Button Toggle')
+            ln_btn_toggle.enabled = surface.done
+            btn_toggle: ui.Button = ln_btn_toggle.get_content()
             btn_toggle.register_pressed_callback(self.toggle_surface)
             btn_toggle.icon.value.set_all(VISIBLE_ICON if surface.visible else INVISIBLE_ICON)
+            btn_toggle.disable_on_press = True
             btn_toggle.surface = surface
 
             btn_delete: ui.Button = ln.find_node('Button Delete').get_content()
             btn_delete.register_pressed_callback(self.delete_surface)
+            btn_delete.disable_on_press = True
             btn_delete.surface = surface
 
             self.lst_surfaces.items.append(ln)
@@ -374,10 +379,13 @@ class MSMS(nanome.AsyncPluginInstance):
         self.btn_delete_all.unusable = not self.surfaces
         self.update_content(self.lst_surfaces, self.btn_toggle_all, self.btn_delete_all)
 
-        if not self.surfaces:
-            self.ln_color_options.enabled = False
+        if not self.surfaces or self.selected_surface and self.selected_surface not in self.surfaces:
+            self.selected_surface = None
+            self.selected_surface_btn = None
             self.ln_no_surface.enabled = True
-            self.update_node(self.ln_color_options, self.ln_no_surface)
+            self.ln_color_options.enabled = False
+            self.ln_surface_generating.enabled = False
+            self.update_node(self.ln_no_surface, self.ln_color_options, self.ln_surface_generating)
 
     def select_surface(self, btn: ui.Button):
         if self.selected_surface_btn:
@@ -389,13 +397,16 @@ class MSMS(nanome.AsyncPluginInstance):
         self.selected_surface = surface
         btn.selected = True
 
-        self.ln_color_options.enabled = True
         self.ln_no_surface.enabled = False
+        self.ln_color_options.enabled = surface.done
+        self.ln_surface_generating.enabled = not surface.done
 
-        self.update_color_dropdowns()
-        self.update_color_inputs()
+        if surface.done:
+            self.update_color_dropdowns()
+            self.update_color_inputs()
+
         self.update_content(btn)
-        self.update_node(self.ln_color_options, self.ln_no_surface)
+        self.update_node(self.ln_no_surface, self.ln_color_options, self.ln_surface_generating)
 
     def toggle_surface(self, btn: ui.Button):
         btn.surface.toggle_visible()
