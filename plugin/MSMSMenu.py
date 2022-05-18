@@ -77,11 +77,13 @@ class MSMS(nanome.AsyncPluginInstance):
         ln_include_hydrogens: ui.LayoutNode = root.find_node('Toggle Include Hydrogens')
         self.btn_include_hydrogens: ui.Button = ln_include_hydrogens.add_new_toggle_switch('Include Hydrogens')
         self.btn_include_hydrogens.register_pressed_callback(self.toggle_include_hydrogens)
+        self.btn_include_hydrogens.text.color.unusable = Color.from_hex('#7f7f7f')
         self.btn_include_hydrogens.selected = self.include_hydrogens
 
         ln_include_waters: ui.LayoutNode = root.find_node('Toggle Include Waters')
         self.btn_include_waters: ui.Button = ln_include_waters.add_new_toggle_switch('Include Waters')
         self.btn_include_waters.register_pressed_callback(self.toggle_include_waters)
+        self.btn_include_waters.text.color.unusable = Color.from_hex('#7f7f7f')
         self.btn_include_waters.selected = self.include_waters
 
         ln_selection_only: ui.LayoutNode = root.find_node('Toggle Selection Only')
@@ -279,6 +281,8 @@ class MSMS(nanome.AsyncPluginInstance):
     def update_selection(self):
         num_atoms = 0
         self.selected_atoms = []
+        has_hydrogens = False
+        has_waters = False
 
         if not self.selected_complex:
             self.lbl_selection.text_value = 'No entry selected'
@@ -290,12 +294,16 @@ class MSMS(nanome.AsyncPluginInstance):
                 if chain.name not in self.selected_chains:
                     continue
                 for atom in chain.atoms:
-                    if not self.include_hydrogens and atom.symbol == 'H':
-                        continue
-                    if not self.include_waters and atom.symbol in ['H', 'O']:
+                    if atom.symbol == 'H':
+                        has_hydrogens = True
+                        if not self.include_hydrogens:
+                            continue
+                    if atom.symbol in ['H', 'O']:
                         elements = sorted(a.symbol for a in atom.residue.atoms)
                         if elements == ['O'] or elements == ['H', 'H', 'O']:
-                            continue
+                            has_waters = True
+                            if not self.include_waters:
+                                continue
                     if self.selection_only and not atom.selected:
                         continue
                     self.selected_atoms.append(atom)
@@ -304,6 +312,16 @@ class MSMS(nanome.AsyncPluginInstance):
             chains_text = f'{num_chains} chain{"s" if num_chains != 1 else ""} selected'
             atoms_text = f'{num_atoms} atom{"s" if num_atoms != 1 else ""} selected'
             self.lbl_selection.text_value = f'{chains_text}\n{atoms_text}'
+
+        self.btn_include_hydrogens.unusable = not has_hydrogens
+        if not has_hydrogens:
+            self.btn_include_hydrogens.selected = False
+            self.include_hydrogens = False
+        self.btn_include_waters.unusable = not has_waters
+        if not has_waters:
+            self.btn_include_waters.selected = False
+            self.include_waters = False
+        self.update_content(self.btn_include_hydrogens, self.btn_include_waters)
 
         self.btn_generate.unusable = num_atoms == 0
         self.update_content(self.lbl_selection, self.btn_generate)
