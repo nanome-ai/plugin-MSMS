@@ -26,6 +26,7 @@ class MSMS(nanome.AsyncPluginInstance):
         self.include_hydrogens = False
         self.include_waters = False
         self.selection_only = False
+        self.compute_by_residue = False
         self.compute_by_chain = True
         self.ambient_occlusion = True
 
@@ -90,6 +91,11 @@ class MSMS(nanome.AsyncPluginInstance):
         self.btn_selection_only: ui.Button = ln_selection_only.add_new_toggle_switch('Selection Only')
         self.btn_selection_only.register_pressed_callback(self.toggle_selection_only)
         self.btn_selection_only.selected = self.selection_only
+
+        ln_compute_by_residue: ui.LayoutNode = root.find_node('Toggle Compute By Residue')
+        self.btn_compute_by_residue: ui.Button = ln_compute_by_residue.add_new_toggle_switch('Compute by Residue')
+        self.btn_compute_by_residue.register_pressed_callback(self.toggle_compute_by_residue)
+        self.btn_compute_by_residue.selected = self.compute_by_residue
 
         ln_compute_by_chain: ui.LayoutNode = root.find_node('Toggle Compute By Chain')
         self.btn_compute_by_chain: ui.Button = ln_compute_by_chain.add_new_toggle_switch('Compute by Chain')
@@ -272,8 +278,19 @@ class MSMS(nanome.AsyncPluginInstance):
         self.selection_only = btn.selected
         self.update_selection()
 
+    def toggle_compute_by_residue(self, btn: ui.Button):
+        self.compute_by_residue = btn.selected
+        if self.compute_by_residue and self.compute_by_chain:
+            self.compute_by_chain = False
+            self.btn_compute_by_chain.selected = False
+            self.update_content(self.btn_compute_by_chain)
+
     def toggle_compute_by_chain(self, btn: ui.Button):
         self.compute_by_chain = btn.selected
+        if self.compute_by_chain and self.compute_by_residue:
+            self.compute_by_residue = False
+            self.btn_compute_by_residue.selected = False
+            self.update_content(self.btn_compute_by_residue)
 
     def toggle_ambient_occlusion(self, btn: ui.Button):
         self.ambient_occlusion = btn.selected
@@ -285,10 +302,11 @@ class MSMS(nanome.AsyncPluginInstance):
         has_waters = False
 
         if not self.selected_complex:
-            self.lbl_selection.text_value = 'No entry selected'
+            self.lbl_selection.text_value = 'Select an entry to begin'
         elif not self.selected_chains:
-            self.lbl_selection.text_value = 'No chains selected'
+            self.lbl_selection.text_value = 'Select one or more chains'
         else:
+            self.selected_residues = set()
             num_chains = len(self.selected_chains)
             for chain in self.selected_complex.chains:
                 if chain.name not in self.selected_chains:
@@ -306,12 +324,15 @@ class MSMS(nanome.AsyncPluginInstance):
                                 continue
                     if self.selection_only and not atom.selected:
                         continue
+                    self.selected_residues.add(atom.residue.serial)
                     self.selected_atoms.append(atom)
 
             num_atoms = len(self.selected_atoms)
+            num_residues = len(self.selected_residues)
             chains_text = f'{num_chains} chain{"s" if num_chains != 1 else ""} selected'
+            residues_text = f'{num_residues} residue{"s" if num_residues != 1 else ""} selected'
             atoms_text = f'{num_atoms} atom{"s" if num_atoms != 1 else ""} selected'
-            self.lbl_selection.text_value = f'{chains_text}\n{atoms_text}'
+            self.lbl_selection.text_value = f'{chains_text}\n{residues_text}\n{atoms_text}'
 
         self.btn_include_hydrogens.unusable = not has_hydrogens
         if not has_hydrogens:
@@ -340,7 +361,7 @@ class MSMS(nanome.AsyncPluginInstance):
             self.change_tab(self.btn_tab2)
             self.select_surface(self.selected_surface_btn)
 
-            await surface.generate(by_chain=self.compute_by_chain, ao=self.ambient_occlusion)
+            await surface.generate(self.compute_by_residue, self.compute_by_chain, self.ambient_occlusion)
             if self.selected_surface == surface:
                 self.select_surface(self.selected_surface_btn)
             self.update_surface_list()

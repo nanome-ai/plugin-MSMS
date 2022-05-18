@@ -90,9 +90,11 @@ class MSMSInstance:
         color.a = self.color.a
         self.color = color
 
-    async def generate(self, by_chain=False, ao=True):
+    async def generate(self, by_residue=False, by_chain=False, ao=True):
         try:
-            if by_chain:
+            if by_residue:
+                await self.compute_msms_by_residue()
+            elif by_chain:
                 await self.compute_msms_by_chain()
             else:
                 await self.compute_msms(self.atoms)
@@ -114,9 +116,23 @@ class MSMSInstance:
         if self.canceled:
             raise Exception('Canceled')
 
+    async def compute_msms_by_residue(self):
+        atoms_by_residue = []
+        current_residue = None
+        for atom in self.atoms:
+            if atom.residue.serial != current_residue:
+                current_residue = atom.residue.serial
+                atoms_by_residue.append([])
+            atoms_by_residue[-1].append(atom)
+
+        num_atoms = 0
+        for atoms in atoms_by_residue:
+            await self.compute_msms(atoms, num_atoms)
+            num_atoms += len(atoms)
+
     async def compute_msms_by_chain(self):
-        atoms_by_chain = [[]]
-        current_chain = self.atoms[0].chain.name
+        atoms_by_chain = []
+        current_chain = None
         for atom in self.atoms:
             if atom.chain.name != current_chain:
                 current_chain = atom.chain.name
