@@ -201,7 +201,7 @@ class MSMS(nanome.AsyncPluginInstance):
             self.update_selection()
 
         update_surface_list = False
-        for surface in self.surfaces:
+        for surface in self.surfaces[:]:
             if surface.index not in indices:
                 update_surface_list = True
                 self.surfaces.remove(surface)
