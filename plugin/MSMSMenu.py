@@ -1,3 +1,4 @@
+import gc
 import os
 
 import nanome
@@ -455,6 +456,7 @@ class MSMS(nanome.AsyncPluginInstance):
         btn.surface.destroy()
         self.surfaces.remove(btn.surface)
         self.update_surface_list()
+        gc.collect()
 
     def toggle_all_surfaces(self, btn: ui.Button):
         show = btn.text.value.idle == 'Show All'
@@ -467,6 +469,7 @@ class MSMS(nanome.AsyncPluginInstance):
             surface.destroy()
         del self.surfaces[:]
         self.update_surface_list()
+        gc.collect()
 
     def select_color_by(self, dd: ui.Dropdown, ddi: ui.DropdownItem):
         old_can_use_custom = self.selected_surface.color_by in COLOR_BY_CAN_USE_CUSTOM
