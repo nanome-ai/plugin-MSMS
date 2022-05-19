@@ -251,7 +251,7 @@ class MSMS(nanome.AsyncPluginInstance):
 
         all_selected = len(self.selected_chains) == len(list(self.selected_complex.chains))
         self.btn_all_chains.selected = all_selected
-        self.update_content(self.btn_all_chains)
+        self.update_content(btn, self.btn_all_chains)
         self.update_selection()
 
     def toggle_all_chains(self, btn: ui.Button):
