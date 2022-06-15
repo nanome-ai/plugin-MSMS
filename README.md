@@ -5,9 +5,8 @@ A Nanome Plugin to run [MSMS](https://www.scripps.edu/sanner/html/msms_home.html
 
 This plugin also computes Ambient Occlusion (AO) to darken buried parts of the molecular surfaces using https://github.com/nezix/AOEmbree
 
-<img width="750" alt="MSMS Tab 1" src="https://user-images.githubusercontent.com/18257337/168937430-c9f116ba-8030-4823-9902-1b866839716c.png">
-<img width="750" alt="MSMS Tab 2" src="https://user-images.githubusercontent.com/18257337/168937436-78f67adf-14e9-42a9-a062-40f29a171d0a.png">
-
+<img width="750" alt="MSMS Tab 1" src="https://user-images.githubusercontent.com/18257337/173956361-406acd9e-7345-4807-994c-1192d18ef8c2.png">
+<img width="750" alt="MSMS Tab 2" src="https://user-images.githubusercontent.com/18257337/173956360-58668ee2-1567-45b0-825d-b0c98dd31321.png">
 
 ## Dependencies
 
