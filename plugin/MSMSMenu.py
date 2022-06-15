@@ -307,7 +307,7 @@ class MSMS(nanome.AsyncPluginInstance):
         elif not self.selected_chains:
             self.lbl_selection.text_value = 'Select one or more chains'
         else:
-            self.selected_residues = set()
+            selected_residues = set()
             num_chains = len(self.selected_chains)
             for chain in self.selected_complex.chains:
                 if chain.name not in self.selected_chains:
@@ -325,11 +325,11 @@ class MSMS(nanome.AsyncPluginInstance):
                                 continue
                     if self.selection_only and not atom.selected:
                         continue
-                    self.selected_residues.add(atom.residue.serial)
+                    selected_residues.add(f'{chain.name}-{atom.residue.serial}')
                     self.selected_atoms.append(atom)
 
             num_atoms = len(self.selected_atoms)
-            num_residues = len(self.selected_residues)
+            num_residues = len(selected_residues)
             chains_text = f'{num_chains} chain{"s" if num_chains != 1 else ""} selected'
             residues_text = f'{num_residues} residue{"s" if num_residues != 1 else ""} selected'
             atoms_text = f'{num_atoms} atom{"s" if num_atoms != 1 else ""} selected'
