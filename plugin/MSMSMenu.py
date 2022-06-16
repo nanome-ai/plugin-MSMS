@@ -488,19 +488,21 @@ class MSMS(nanome.AsyncPluginInstance):
 
     def update_color(self, ui):
         to_update = [self.dd_preset]
-        pairs = [
-            (self.sld_red, self.inp_red),
-            (self.sld_green, self.inp_green),
-            (self.sld_blue, self.inp_blue),
-            (self.sld_alpha, self.inp_alpha),
+        channels = [
+            (self.sld_red, self.inp_red, 255),
+            (self.sld_green, self.inp_green, 255),
+            (self.sld_blue, self.inp_blue, 255),
+            (self.sld_alpha, self.inp_alpha, 100),
         ]
-        for sld, inp in pairs:
+        for sld, inp, maxv in channels:
             if ui == sld:
                 inp.input_text = int(sld.current_value)
                 to_update.append(inp)
             elif ui == inp:
-                sld.current_value = float(inp.input_text)
-                to_update.append(sld)
+                v = max(0, min(maxv, float(inp.input_text)))
+                inp.input_text = int(v)
+                sld.current_value = v
+                to_update.extend([inp, sld])
 
         r = int(self.sld_red.current_value)
         g = int(self.sld_green.current_value)
