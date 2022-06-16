@@ -1,4 +1,4 @@
-from plugin import MSMSMenu
+from plugin import MSMS
 
 if __name__ == "__main__":
-    MSMSMenu.main()
+    MSMS.main()
