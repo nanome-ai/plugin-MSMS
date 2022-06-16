@@ -513,10 +513,15 @@ class MSMS(nanome.AsyncPluginInstance):
         self.apply_color()
 
     def update_color_dropdowns(self):
+        can_use_custom = True
         for ddi in self.dd_color_by.items:
             ddi.selected = False
             if ddi.value == self.selected_surface.color_by:
                 ddi.selected = True
+                can_use_custom = ddi.value in COLOR_BY_CAN_USE_CUSTOM
+
+        self.ln_custom_color.enabled = can_use_custom
+        self.ln_no_color.enabled = not can_use_custom
 
         is_custom = True
         for ddi in self.dd_preset.items:
