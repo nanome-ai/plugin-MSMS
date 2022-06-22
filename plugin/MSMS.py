@@ -303,6 +303,7 @@ class MSMS(nanome.AsyncPluginInstance):
 
     def update_selection(self):
         num_atoms = 0
+        num_residues = 0
         self.selected_atoms = []
         has_hydrogens = False
         has_waters = False
