@@ -354,7 +354,8 @@ class MSMS(nanome.AsyncPluginInstance):
             self.include_waters = False
         self.update_content(self.btn_include_hydrogens, self.btn_include_waters)
 
-        self.btn_generate.unusable = num_atoms == 0 or num_atoms > MAX_ATOM_COUNT or num_residues > MAX_RESIDUE_COUNT
+        too_many_residues = (self.compute_by_residue and num_residues > MAX_RESIDUE_COUNT)
+        self.btn_generate.unusable = num_atoms == 0 or num_atoms > MAX_ATOM_COUNT or too_many_residues
         self.update_content(self.lbl_selection, self.btn_generate)
 
     @async_callback
