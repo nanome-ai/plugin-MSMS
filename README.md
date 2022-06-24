@@ -1,12 +1,12 @@
-# Nanome - Molecular surface with MSMS
+# Nanome - High Quality Surfaces
 
 A Nanome Plugin to run [MSMS](https://www.scripps.edu/sanner/html/msms_home.html) that computes molecular surfaces and load them in Nanome.
 (Molecular Surface by Michael Sanner)
 
 This plugin also computes Ambient Occlusion (AO) to darken buried parts of the molecular surfaces using https://github.com/nezix/AOEmbree
 
-<img width="750" alt="MSMS Tab 1" src="https://user-images.githubusercontent.com/18257337/173958022-13855bc0-471c-4c9e-80fd-22a3f088da59.png">
-<img width="750" alt="MSMS Tab 2" src="https://user-images.githubusercontent.com/18257337/173958028-ba54c77a-246b-474d-97ba-181d54aae584.png">
+<img width="750" alt="High Quality Surfaces Tab 1" src="https://user-images.githubusercontent.com/18257337/173958022-13855bc0-471c-4c9e-80fd-22a3f088da59.png">
+<img width="750" alt="High Quality Surfaces Tab 2" src="https://user-images.githubusercontent.com/18257337/173958028-ba54c77a-246b-474d-97ba-181d54aae584.png">
 
 ## Dependencies
 
@@ -24,7 +24,7 @@ $ ./deploy.sh -a <plugin_server_address> [optional args]
 
 ## Development
 
-To run the MSMS plugin with autoreload:
+To run the High Quality Surfaces plugin with autoreload:
 
 ```sh
 $ python3 -m pip install -r requirements.txt
