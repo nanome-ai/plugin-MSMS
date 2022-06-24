@@ -6,7 +6,7 @@ from nanome import ui
 from nanome.api.structure import Atom, Complex
 from nanome.util import async_callback, enums, Color
 
-from .MSMSInstance import COLOR_BY_OPTIONS, COLOR_BY_CAN_USE_CUSTOM, COLOR_PRESETS, MSMSInstance
+from .SurfaceInstance import COLOR_BY_OPTIONS, COLOR_BY_CAN_USE_CUSTOM, COLOR_PRESETS, SurfaceInstance
 
 MAX_ATOM_COUNT = 100000
 MAX_RESIDUE_COUNT = 1000
@@ -19,7 +19,7 @@ VISIBLE_ICON = os.path.join(BASE_DIR, 'assets/visible.png')
 INVISIBLE_ICON = os.path.join(BASE_DIR, 'assets/invisible.png')
 
 
-class MSMS(nanome.AsyncPluginInstance):
+class HighQualitySurfaces(nanome.AsyncPluginInstance):
     def start(self):
         self.set_plugin_list_button(self.PluginListButtonType.run, 'Open')
 
@@ -35,8 +35,8 @@ class MSMS(nanome.AsyncPluginInstance):
         self.ambient_occlusion = True
 
         self.selected_surface_btn: ui.Button = None
-        self.selected_surface: MSMSInstance = None
-        self.surfaces: list[MSMSInstance] = []
+        self.selected_surface: SurfaceInstance = None
+        self.surfaces: list[SurfaceInstance] = []
 
         self.create_menu()
         self.on_run()
@@ -366,7 +366,7 @@ class MSMS(nanome.AsyncPluginInstance):
         index = self.selected_complex.index
 
         try:
-            surface = MSMSInstance(name, index, self.selected_atoms)
+            surface = SurfaceInstance(name, index, self.selected_atoms)
             self.surfaces.append(surface)
             self.selected_surface = surface
             self.update_surface_list()
@@ -443,7 +443,7 @@ class MSMS(nanome.AsyncPluginInstance):
             self.selected_surface_btn.selected = False
             self.update_content(self.selected_surface_btn)
 
-        surface: MSMSInstance = btn.surface
+        surface: SurfaceInstance = btn.surface
         self.selected_surface_btn = btn
         self.selected_surface = surface
         btn.selected = True
@@ -574,8 +574,8 @@ class MSMS(nanome.AsyncPluginInstance):
 
 
 def main():
-    plugin = nanome.Plugin("MSMS", "Run MSMS and load the molecular surface in Nanome.", "Computation", False)
-    plugin.set_plugin_class(MSMS)
+    plugin = nanome.Plugin("High Quality Surfaces", "Generate stunning publication-ready surface representations and coloring. Powered by MSMS and AOEmbree. Note that these surfaces do not save with the Nanome workspace.", "Computation", False)
+    plugin.set_plugin_class(HighQualitySurfaces)
     plugin.run()
 
 

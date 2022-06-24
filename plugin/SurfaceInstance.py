@@ -53,7 +53,7 @@ elif sys.platform == 'win32':
     MSMS_PATH = os.path.join(BASE_DIR, 'bin/win32/msms.exe')
 
 
-class MSMSInstance:
+class SurfaceInstance:
     def __init__(self, name: str, index: int, atoms: 'list[nanome.structure.Atom]'):
         self.name = name
         self.index = index
