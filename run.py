@@ -1,4 +1,4 @@
-from plugin import MSMS
+from plugin import HighQualitySurfaces
 
 if __name__ == "__main__":
-    MSMS.main()
+    HighQualitySurfaces.main()
