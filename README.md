@@ -1,7 +1,7 @@
 # Nanome - High Quality Surfaces
 
 A Nanome Plugin to run [MSMS](https://www.scripps.edu/sanner/html/msms_home.html) that computes molecular surfaces and load them in Nanome.
-(Molecular Surface by Michael Sanner)
+(Molecular Surface by Michel Sanner)
 
 This plugin also computes Ambient Occlusion (AO) to darken buried parts of the molecular surfaces using https://github.com/nezix/AOEmbree
 
