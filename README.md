@@ -31,6 +31,10 @@ $ python3 -m pip install -r requirements.txt
 $ python3 run.py -r -a <plugin_server_address> [optional args]
 ```
 
+## Citation
+
+[Sanner, M. F., Olson A.J. & Spehner, J.-C. (1996). Reduced Surface: An Efficient Way to Compute Molecular Surfaces. Biopolymers 38:305-320.](https://onlinelibrary.wiley.com/doi/abs/10.1002/(SICI)1097-0282(199603)38:3%3C305::AID-BIP4%3E3.0.CO;2-Y)
+
 ## License
 
 MIT
