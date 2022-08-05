@@ -65,6 +65,7 @@ class SurfaceInstance:
 
         self.color_by: enums.ColorScheme = enums.ColorScheme.Chain
         self.color: Color = Color.from_hex(COLOR_PRESETS[randint(1, 12)][1])
+        self.ao_scale: float = 1
         self.visible = True
 
         self.vertices: list[float] = []
@@ -74,6 +75,10 @@ class SurfaceInstance:
         self.indices: list[int] = []
         self.ao: list[float] = []
         self.mesh = shapes.Mesh()
+
+    @property
+    def has_ao(self):
+        return len(self.ao) > 0
 
     @property
     def num_vertices(self):
@@ -346,11 +351,16 @@ class SurfaceInstance:
             self.colors += color_per_atom[i]
 
     async def apply_color_to_mesh(self):
-        has_ao = len(self.ao) > 0
+        # quadratic ao scale
+        ao_min = 0.5 - 0.5 * self.ao_scale
+        if ao_min > 0:
+            ao_coef = ao_min / (4 * ao_min ** 2)
         for i in range(self.num_vertices):
             j = i * 4
             r, g, b = self.colors[j:j + 3]
-            ao = self.ao[i] if has_ao else 1
+            ao = self.ao[i] if self.has_ao else 1
+            if self.has_ao and ao_min > 0 and ao < 2 * ao_min:
+                ao = ao_coef * ao ** 2 + ao_min
             self.mesh.colors[j:j + 3] = [r * ao, g * ao, b * ao]
 
         if self.visible and not self.canceled:

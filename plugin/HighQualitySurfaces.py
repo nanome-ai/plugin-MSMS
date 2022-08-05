@@ -128,6 +128,7 @@ class HighQualitySurfaces(nanome.AsyncPluginInstance):
         self.ln_surface_generating: ui.LayoutNode = root.find_node('Surface Generating')
         self.ln_custom_color: ui.LayoutNode = root.find_node('Custom Color')
         self.ln_no_color: ui.LayoutNode = root.find_node('No Color')
+        self.ln_ao: ui.LayoutNode = root.find_node('AO')
 
         self.dd_color_by: ui.Dropdown = root.find_node('Dropdown Color By').get_content()
         self.dd_preset: ui.Dropdown = root.find_node('Dropdown Preset').get_content()
@@ -138,19 +139,23 @@ class HighQualitySurfaces(nanome.AsyncPluginInstance):
         self.sld_green: ui.Slider = root.find_node('Slider Green').get_content()
         self.sld_blue: ui.Slider = root.find_node('Slider Blue').get_content()
         self.sld_alpha: ui.Slider = root.find_node('Slider Alpha').get_content()
+        self.sld_ao: ui.Slider = root.find_node('Slider AO').get_content()
         self.sld_red.register_released_callback(self.update_color)
         self.sld_green.register_released_callback(self.update_color)
         self.sld_blue.register_released_callback(self.update_color)
         self.sld_alpha.register_released_callback(self.update_color)
+        self.sld_ao.register_released_callback(self.update_color)
 
         self.inp_red: ui.TextInput = root.find_node('Input Red').get_content()
         self.inp_green: ui.TextInput = root.find_node('Input Green').get_content()
         self.inp_blue: ui.TextInput = root.find_node('Input Blue').get_content()
         self.inp_alpha: ui.TextInput = root.find_node('Input Alpha').get_content()
+        self.inp_ao: ui.TextInput = root.find_node('Input AO').get_content()
         self.inp_red.register_submitted_callback(self.update_color)
         self.inp_green.register_submitted_callback(self.update_color)
         self.inp_blue.register_submitted_callback(self.update_color)
         self.inp_alpha.register_submitted_callback(self.update_color)
+        self.inp_ao.register_submitted_callback(self.update_color)
 
         self.init_color_dropdowns()
         self.update_entry_list()
@@ -451,6 +456,7 @@ class HighQualitySurfaces(nanome.AsyncPluginInstance):
         self.ln_no_surface.enabled = False
         self.ln_color_options.enabled = surface.done
         self.ln_surface_generating.enabled = not surface.done
+        self.ln_ao.enabled = surface.has_ao
 
         if surface.done:
             self.update_color_dropdowns()
@@ -504,6 +510,7 @@ class HighQualitySurfaces(nanome.AsyncPluginInstance):
             (self.sld_green, self.inp_green, 255),
             (self.sld_blue, self.inp_blue, 255),
             (self.sld_alpha, self.inp_alpha, 100),
+            (self.sld_ao, self.inp_ao, 100)
         ]
         for sld, inp, maxv in channels:
             if ui == sld:
@@ -521,6 +528,8 @@ class HighQualitySurfaces(nanome.AsyncPluginInstance):
         a = int(255 * self.sld_alpha.current_value / 100)
 
         self.selected_surface.color = Color(r, g, b, a)
+        self.selected_surface.ao_scale = self.sld_ao.current_value / 100
+
         self.update_color_dropdowns()
         self.update_content(to_update)
         self.apply_color()
