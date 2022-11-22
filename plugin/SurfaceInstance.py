@@ -146,104 +146,104 @@ class SurfaceInstance:
 
     async def compute_msms(self, atoms: 'list[nanome.structure.Atom]', index_offset=0):
         self.raise_if_canceled()
-        temp_dir = tempfile.TemporaryDirectory()
-        msms_input = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.xyzr', delete=False)
-        msms_output = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.out', delete=False)
-        hdensity = MSMS_HDENSITY_SM if len(atoms) < 20000 else MSMS_HDENSITY_LG
+        with tempfile.TemporaryDirectory() as temp_dir:
+            msms_input = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.xyzr', delete=False)
+            msms_output = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.out', delete=False)
+            hdensity = MSMS_HDENSITY_SM if len(atoms) < 20000 else MSMS_HDENSITY_LG
 
-        with open(msms_input.name, 'w') as f:
-            for atom in atoms:
-                x, y, z = atom.position
-                # replace unknown atoms with carbon
-                r = 1.7 if atom.vdw_radius < 0.0001 else atom.vdw_radius
-                f.write(f'{x:.5f} {y:.5f} {z:.5f} {r:.5f}\n')
+            with open(msms_input.name, 'w') as f:
+                for atom in atoms:
+                    x, y, z = atom.position
+                    # replace unknown atoms with carbon
+                    r = 1.7 if atom.vdw_radius < 0.0001 else atom.vdw_radius
+                    f.write(f'{x:.5f} {y:.5f} {z:.5f} {r:.5f}\n')
 
-        p = Process(MSMS_PATH, label=f'MSMS {len(atoms)} atoms', output_text=True, timeout=0)
-        p.on_error = Logs.warning
-        p.args = [
-            '-if ', msms_input.name,
-            '-of ', msms_output.name,
-            '-probe_radius', str(MSMS_PROBE_RADIUS),
-            '-density', str(MSMS_DENSITY),
-            '-hdensity', str(hdensity),
-            '-no_area', '-no_header',
-            '-all_components'
-        ]
+            p = Process(MSMS_PATH, label=f'MSMS {len(atoms)} atoms', output_text=True, timeout=0)
+            p.on_error = Logs.warning
+            p.args = [
+                '-if ', msms_input.name,
+                '-of ', msms_output.name,
+                '-probe_radius', str(MSMS_PROBE_RADIUS),
+                '-density', str(MSMS_DENSITY),
+                '-hdensity', str(hdensity),
+                '-no_area', '-no_header',
+                '-all_components'
+            ]
 
-        self.raise_if_canceled()
-        self.active_process = p
-        exit_code = await p.start()
-        self.active_process = None
-        self.raise_if_canceled()
+            self.raise_if_canceled()
+            self.active_process = p
+            exit_code = await p.start()
+            self.active_process = None
+            self.raise_if_canceled()
 
-        if exit_code != 0 or not os.path.isfile(msms_output.name + '.vert'):
-            raise Exception('Failed to run MSMS')
+            if exit_code != 0 or not os.path.isfile(msms_output.name + '.vert'):
+                raise Exception('Failed to run MSMS')
 
-        file_index = 0
-        while True:
-            name = msms_output.name
-            if file_index > 0:
-                name += f'_{file_index}'
-            if not os.path.isfile(name + '.vert'):
-                break
-            vertex_offset = self.num_vertices
-            with open(name + '.vert', 'r') as f:
-                for l in f.readlines():
-                    if l.startswith('#'):
-                        continue
-                    s = l.split()
-                    self.vertices += map(float, s[0:3])
-                    self.normals += map(float, s[3:6])
-                    self.indices.append(int(s[7]) - 1 + index_offset)
-            with open(name + '.face', 'r') as f:
-                for l in f.readlines():
-                    if l.startswith('#'):
-                        continue
-                    s = l.split()
-                    self.triangles += [int(x) - 1 + vertex_offset for x in s[0:3]]
-            file_index += 1
+            file_index = 0
+            while True:
+                name = msms_output.name
+                if file_index > 0:
+                    name += f'_{file_index}'
+                if not os.path.isfile(name + '.vert'):
+                    break
+                vertex_offset = self.num_vertices
+                with open(name + '.vert', 'r') as f:
+                    for l in f.readlines():
+                        if l.startswith('#'):
+                            continue
+                        s = l.split()
+                        self.vertices += map(float, s[0:3])
+                        self.normals += map(float, s[3:6])
+                        self.indices.append(int(s[7]) - 1 + index_offset)
+                with open(name + '.face', 'r') as f:
+                    for l in f.readlines():
+                        if l.startswith('#'):
+                            continue
+                        s = l.split()
+                        self.triangles += [int(x) - 1 + vertex_offset for x in s[0:3]]
+                file_index += 1
 
     async def compute_ao(self):
         self.raise_if_canceled()
-        temp_dir = tempfile.TemporaryDirectory()
-        ao_input = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.obj', delete=False)
-        ao_output = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.out', delete=False)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ao_input = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.obj', delete=False)
+            ao_output = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.out', delete=False)
 
-        with open(ao_input.name, 'w') as f:
-            for v in range(self.num_vertices):
-                i = v * 3
-                f.write(f'v {self.vertices[i]:.6f} {self.vertices[i + 1]:.6f} {self.vertices[i + 2]:.6f}\n')
-                f.write(f'vn {self.normals[i]:.6f} {self.normals[i + 1]:.6f} {self.normals[i + 2]:.6f}\n')
-            for t in range(len(self.triangles) // 3):
-                i = t * 3
-                f.write(f'f {self.triangles[i] + 1} {self.triangles[i + 1] + 1} {self.triangles[i + 2] + 1}\n')
+            with open(ao_input.name, 'w') as f:
+                for v in range(self.num_vertices):
+                    i = v * 3
+                    f.write(f'v {self.vertices[i]:.6f} {self.vertices[i + 1]:.6f} {self.vertices[i + 2]:.6f}\n')
+                    f.write(f'vn {self.normals[i]:.6f} {self.normals[i + 1]:.6f} {self.normals[i + 2]:.6f}\n')
+                for t in range(len(self.triangles) // 3):
+                    i = t * 3
+                    f.write(f'f {self.triangles[i] + 1} {self.triangles[i + 1] + 1} {self.triangles[i + 2] + 1}\n')
 
-        p = Process(AO_PATH, label=f'AOEmbree {self.num_vertices} vertices', output_text=True, timeout=0)
-        p.on_error = Logs.warning
-        p.args = [
-            '-a', '-n',
-            '-i', ao_input.name,
-            '-o', ao_output.name,
-            '-s', str(AO_STEPS),
-            '-d', str(AO_MAX_DIST)
-        ]
+            p = Process(AO_PATH, label=f'AOEmbree {self.num_vertices} vertices', output_text=True, timeout=0)
+            p.on_error = Logs.warning
+            p.args = [
+                '-a', '-n',
+                '-i', ao_input.name,
+                '-o', ao_output.name,
+                '-s', str(AO_STEPS),
+                '-d', str(AO_MAX_DIST)
+            ]
 
-        self.raise_if_canceled()
-        self.active_process = p
-        exit_code = await p.start()
-        self.active_process = None
-        self.raise_if_canceled()
+            self.raise_if_canceled()
+            self.active_process = p
+            exit_code = await p.start()
+            self.active_process = None
+            self.raise_if_canceled()
 
-        if exit_code != 0 or not os.path.isfile(ao_output.name):
-            Logs.warning('Failed to run AOEmbree')
-            return
-
-        with open(ao_output.name, 'r') as f:
-            data = ' '.join(f.readlines()).split()
-            if len(data) != self.num_vertices:
-                Logs.warning(f'AOEmbree output has wrong number of vertices, expected {self.num_vertices}, got {len(data)}')
+            if exit_code != 0 or not os.path.isfile(ao_output.name):
+                Logs.warning('Failed to run AOEmbree')
                 return
-            self.ao = list(map(float, data))
+
+            with open(ao_output.name, 'r') as f:
+                data = ' '.join(f.readlines()).split()
+                if len(data) != self.num_vertices:
+                    Logs.warning(f'AOEmbree output has wrong number of vertices, expected {self.num_vertices}, got {len(data)}')
+                    return
+                self.ao = list(map(float, data))
 
     async def create_mesh(self):
         self.raise_if_canceled()
