@@ -147,8 +147,8 @@ class SurfaceInstance:
     async def compute_msms(self, atoms: 'list[nanome.structure.Atom]', index_offset=0):
         self.raise_if_canceled()
         with tempfile.TemporaryDirectory() as temp_dir:
-            msms_input = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.xyzr', delete=False)
-            msms_output = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.out', delete=False)
+            msms_input = tempfile.NamedTemporaryFile(dir=temp_dir, suffix='.xyzr', delete=False)
+            msms_output = tempfile.NamedTemporaryFile(dir=temp_dir, suffix='.out', delete=False)
             hdensity = MSMS_HDENSITY_SM if len(atoms) < 20000 else MSMS_HDENSITY_LG
 
             with open(msms_input.name, 'w') as f:
@@ -206,8 +206,8 @@ class SurfaceInstance:
     async def compute_ao(self):
         self.raise_if_canceled()
         with tempfile.TemporaryDirectory() as temp_dir:
-            ao_input = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.obj', delete=False)
-            ao_output = tempfile.NamedTemporaryFile(dir=temp_dir.name, suffix='.out', delete=False)
+            ao_input = tempfile.NamedTemporaryFile(dir=temp_dir, suffix='.obj', delete=False)
+            ao_output = tempfile.NamedTemporaryFile(dir=temp_dir, suffix='.out', delete=False)
 
             with open(ao_input.name, 'w') as f:
                 for v in range(self.num_vertices):
