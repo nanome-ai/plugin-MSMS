@@ -8,6 +8,8 @@ import nanome
 from nanome import shapes
 from nanome.util import enums, Color, Logs, Process
 
+from .utils import natural_sorted
+
 BASE_DIR = os.path.join(os.path.dirname(__file__))
 MSMS_PATH = None
 AO_PATH = None
@@ -285,7 +287,7 @@ class SurfaceInstance:
         await self.apply_color_to_mesh()
 
     def apply_color_by_chain(self):
-        chain_names = sorted(set(atom.chain.name for atom in self.atoms))
+        chain_names = natural_sorted(set(atom.chain.name for atom in self.atoms))
         color_per_atom = []
         for atom in self.atoms:
             i = chain_names.index(atom.chain.name)

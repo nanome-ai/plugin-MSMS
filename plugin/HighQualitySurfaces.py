@@ -7,6 +7,7 @@ from nanome.api.structure import Atom, Complex
 from nanome.util import async_callback, enums, Color
 
 from .SurfaceInstance import COLOR_BY_OPTIONS, COLOR_BY_CAN_USE_CUSTOM, COLOR_PRESETS, SurfaceInstance
+from .utils import natural_sorted
 
 MAX_ATOM_COUNT = 100000
 MAX_RESIDUE_COUNT = 1000
@@ -237,7 +238,7 @@ class HighQualitySurfaces(nanome.AsyncPluginInstance):
         self.btn_all_chains.selected = False
 
         self.lst_chains.items.clear()
-        for chain in sorted(c.name for c in self.selected_complex.chains):
+        for chain in natural_sorted(c.name for c in self.selected_complex.chains):
             ln = ui.LayoutNode()
             btn = ln.add_new_button(chain)
             btn.chain = chain
@@ -361,7 +362,7 @@ class HighQualitySurfaces(nanome.AsyncPluginInstance):
 
     @async_callback
     async def generate_msms(self, btn: ui.Button):
-        chain_names = ' '.join(sorted(self.selected_chains))
+        chain_names = ' '.join(natural_sorted(self.selected_chains))
         name = f'{self.selected_complex.full_name} <size=40%>{chain_names}</size>'
         index = self.selected_complex.index
 
